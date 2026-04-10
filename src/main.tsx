@@ -5,6 +5,7 @@ import { CalendarPage } from "./calendar-page";
 import { ComingSoonPage } from "./coming-soon";
 import { PerformerPicker } from "./performer-picker";
 import { HomePage } from "./home-page";
+import { CalendarAdmin } from "./admin-calendar";
 import {
   formatLabels,
   roleLabels,
@@ -232,7 +233,7 @@ function AdminApp() {
   const [checking, setChecking] = useState(true);
   const [password, setPassword] = useState("");
   const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
-  const [tab, setTab] = useState<"shows" | "entities" | "backup">("shows");
+  const [tab, setTab] = useState<"shows" | "entities" | "calendar" | "backup">("shows");
 
   useEffect(() => {
     fetch("/api/admin/me")
@@ -283,10 +284,12 @@ function AdminApp() {
       <nav className="admin-tabs">
         <button className={tab === "shows" ? "active" : ""} onClick={() => setTab("shows")}>演出</button>
         <button className={tab === "entities" ? "active" : ""} onClick={() => setTab("entities")}>实体</button>
+        <button className={tab === "calendar" ? "active" : ""} onClick={() => setTab("calendar")}>日历</button>
         <button className={tab === "backup" ? "active" : ""} onClick={() => setTab("backup")}>备份</button>
       </nav>
       {tab === "shows" ? <ShowAdmin snapshot={snapshot} onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
       {tab === "entities" ? <EntityAdmin snapshot={snapshot} onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
+      {tab === "calendar" ? <CalendarAdmin brands={snapshot.brands} venues={snapshot.venues} onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
       {tab === "backup" ? <BackupAdmin onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
     </main>
   );

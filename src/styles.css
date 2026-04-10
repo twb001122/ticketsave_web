@@ -758,6 +758,11 @@ textarea {
   gap: 16px;
 }
 
+.calendar-admin .table-panel {
+  display: grid;
+  gap: 12px;
+}
+
 .empty-state {
   display: grid;
   place-items: center;
