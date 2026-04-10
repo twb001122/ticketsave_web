@@ -198,4 +198,27 @@ describe("calendar event store", () => {
     expect(store.listCalendarEvents()[0].createdShowID).toBe(show.id);
     expect(() => store.createShowFromCalendarEvent(event.id)).toThrow("这条日历事件已经生成过票根。");
   });
+
+  it("clears calendar ticket links when deleting generated shows", async () => {
+    const store = await createDataStore({ inMemory: true });
+    const brand = store.createBrand({ displayName: "笑声工厂", cityName: "上海" });
+    const venue = store.createVenue({ displayName: "喜剧剧场", cityName: "上海" });
+    const event = store.createCalendarEvent({
+      title: "周六开放麦",
+      eventDate: "2026-04-18",
+      startTime: "20:00",
+      brandID: brand.id,
+      venueID: venue.id,
+      format: "standup",
+      myRole: "host",
+      showType: "openMic"
+    });
+
+    const show = store.createShowFromCalendarEvent(event.id);
+    store.deleteShow(show.id);
+
+    expect(store.listCalendarEvents()[0].createdShowID).toBeNull();
+    const replacement = store.createShowFromCalendarEvent(event.id);
+    expect(replacement.id).not.toBe(show.id);
+  });
 });

@@ -233,6 +233,7 @@ export class DataStore {
   deleteShow(id: string): void {
     this.db.run("DELETE FROM shows WHERE id = ?", [id]);
     this.db.run("DELETE FROM show_performers WHERE showID = ?", [id]);
+    this.db.run("UPDATE calendar_events SET createdShowID = NULL, updatedAt = ? WHERE createdShowID = ?", [nowISO(), id]);
     this.persist();
   }
 
