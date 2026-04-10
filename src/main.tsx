@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { fetchJSON } from "./api";
+import { CalendarPage } from "./calendar-page";
 import { ComingSoonPage } from "./coming-soon";
 import { PerformerPicker } from "./performer-picker";
 import { HomePage } from "./home-page";
@@ -64,7 +65,7 @@ export function App() {
   if (route.path === "/admin") return <AdminApp />;
   if (route.path === "/shows/:id") return <ShowDetail id={route.params.id} />;
   if (route.path === "/tickets") return <ArchiveWall />;
-  if (route.path === "/calendar") return <ComingSoonPage title="演出日历" onNavigate={navigate} />;
+  if (route.path === "/calendar") return <CalendarPage onNavigate={navigate} />;
   if (route.path === "/guestbook") return <ComingSoonPage title="留言板" onNavigate={navigate} />;
   if (route.path === "/diary") return <ComingSoonPage title="喜剧日记" onNavigate={navigate} />;
   if (route.path === "/friends") return <ComingSoonPage title="马达和他的朋友们" onNavigate={navigate} />;
