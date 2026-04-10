@@ -4,11 +4,16 @@ import initSqlJs, { type Database } from "sql.js";
 import { v4 as uuidv4 } from "uuid";
 import {
   asNullableString,
+  formatLabels,
+  roleLabels,
+  typeLabels,
   nowISO,
   normalizeValue,
   storedTitle,
   venueLookupKey,
   type CalendarEventInput,
+  type CalendarImportResult,
+  type CalendarImportRow,
   type CalendarEventRecord,
   type CalendarSource,
   type ArchiveSummary,
@@ -427,6 +432,44 @@ export class DataStore {
     return filters.month ? events.filter((event) => event.eventDate.startsWith(`${filters.month}-`)) : events;
   }
 
+  importCalendarRows(rows: Partial<CalendarImportRow>[]): CalendarImportResult {
+    const result: CalendarImportResult = {
+      importedCount: 0,
+      skippedCount: 0,
+      createdBrands: [],
+      createdVenues: [],
+      errors: []
+    };
+
+    rows.forEach((row, index) => {
+      const rowNumber = index + 1;
+      const parsed = parseCalendarRow(row, rowNumber);
+      if (parsed.errors.length > 0) {
+        result.skippedCount += 1;
+        result.errors.push(...parsed.errors);
+        return;
+      }
+
+      const brand = this.findOrCreateImportBrand(parsed.value.brand, parsed.value.city, result);
+      const venue = this.findOrCreateImportVenue(parsed.value.venue, parsed.value.city, result);
+      this.createCalendarEvent({
+        title: parsed.value.title,
+        eventDate: parsed.value.date,
+        startTime: parsed.value.startTime,
+        brandID: brand.id,
+        venueID: venue.id,
+        format: parsed.value.format,
+        myRole: parsed.value.myRole,
+        showType: parsed.value.showType,
+        notes: parsed.value.notes,
+        source: "import"
+      });
+      result.importedCount += 1;
+    });
+
+    return result;
+  }
+
   listPublicCalendarEvents(filters: { month?: string } = {}): PublicCalendarEventSummary[] {
     return this.listCalendarEvents(filters).map((event) => this.toPublicCalendarEvent(event));
   }
@@ -483,6 +526,26 @@ export class DataStore {
     );
     this.persist();
     return updated;
+  }
+
+  createShowFromCalendarEvent(id: string): ShowRecord {
+    const event = this.requireCalendarEvent(id);
+    if (event.createdShowID) throw new Error("这条日历事件已经生成过票根。");
+    const show = this.createShow({
+      title: event.title,
+      date: `${event.eventDate}T${event.startTime}:00.000`,
+      venueID: event.venueID,
+      brandID: event.brandID,
+      format: event.format,
+      myRole: event.myRole,
+      showType: event.showType,
+      notes: event.notes,
+      notesPublic: false,
+      status: "published"
+    });
+    this.db.run("UPDATE calendar_events SET createdShowID = ?, updatedAt = ? WHERE id = ?", [show.id, nowISO(), id]);
+    this.persist();
+    return show;
   }
 
   deleteCalendarEvent(id: string): void {
@@ -856,6 +919,24 @@ export class DataStore {
     return event;
   }
 
+  private findOrCreateImportBrand(displayName: string, cityName: string | null, result: CalendarImportResult): BrandRecord {
+    const normalizedKey = normalizeValue(displayName);
+    const existing = this.listBrands().find((brand) => brand.normalizedKey === normalizedKey);
+    if (existing) return existing;
+    const brand = this.createBrand({ displayName, cityName });
+    result.createdBrands.push({ id: brand.id, displayName: brand.displayName });
+    return brand;
+  }
+
+  private findOrCreateImportVenue(displayName: string, cityName: string | null, result: CalendarImportResult): VenueRecord {
+    const lookupKey = venueLookupKey(displayName, cityName);
+    const existing = this.listVenues().find((venue) => venue.lookupKey === lookupKey);
+    if (existing) return existing;
+    const venue = this.createVenue({ displayName, cityName });
+    result.createdVenues.push({ id: venue.id, displayName: venue.displayName, cityName: venue.cityName });
+    return venue;
+  }
+
   private calendarEventFromInput(input: CalendarEventInput & {
     id: string;
     createdShowID: string | null;
@@ -1004,6 +1085,71 @@ function requireTime(value: string | undefined): string {
   const [hour, minute] = time.split(":").map(Number);
   if (hour > 23 || minute > 59) throw new Error("日历事件开始时间必须是有效的 HH:mm。");
   return time;
+}
+
+const formatByLabel = new Map(Object.entries(formatLabels).map(([key, label]) => [label, key as ShowFormat]));
+const roleByLabel = new Map(Object.entries(roleLabels).map(([key, label]) => [label, key as ShowRole]));
+const typeByLabel = new Map(Object.entries(typeLabels).map(([key, label]) => [label, key as ShowType]));
+
+function parseCalendarRow(
+  row: Partial<CalendarImportRow>,
+  rowNumber: number
+): {
+  value: {
+    date: string;
+    startTime: string;
+    brand: string;
+    venue: string;
+    city: string | null;
+    format: ShowFormat;
+    myRole: ShowRole;
+    showType: ShowType;
+    title: string;
+    notes: string;
+  };
+  errors: CalendarImportResult["errors"];
+} {
+  const errors: CalendarImportResult["errors"] = [];
+  const date = String(row.date ?? "").trim();
+  const startTime = String(row.startTime ?? "").trim();
+  const brand = String(row.brand ?? "").trim();
+  const venue = String(row.venue ?? "").trim();
+  const city = asNullableString(row.city);
+  const format = formatByLabel.get(String(row.format ?? "").trim());
+  const myRole = roleByLabel.get(String(row.myRole ?? "").trim());
+  const showType = typeByLabel.get(String(row.showType ?? "").trim());
+
+  try {
+    requireDate(date);
+  } catch (error) {
+    errors.push({ row: rowNumber, field: "date", message: (error as Error).message });
+  }
+  try {
+    requireTime(startTime);
+  } catch (error) {
+    errors.push({ row: rowNumber, field: "startTime", message: (error as Error).message });
+  }
+  if (!brand) errors.push({ row: rowNumber, field: "brand", message: "厂牌不能为空。" });
+  if (!venue) errors.push({ row: rowNumber, field: "venue", message: "场地不能为空。" });
+  if (!format) errors.push({ row: rowNumber, field: "format", message: "形式必须是单口、漫才、即兴、新喜剧或其他。" });
+  if (!myRole) errors.push({ row: rowNumber, field: "myRole", message: "角色必须是主持、演员、主咖、开场或其他。" });
+  if (!showType) errors.push({ row: rowNumber, field: "showType", message: "类型必须是开放麦、商演、主打秀、专场、比赛或其他。" });
+
+  return {
+    value: {
+      date,
+      startTime,
+      brand,
+      venue,
+      city,
+      format: format ?? "other",
+      myRole: myRole ?? "other",
+      showType: showType ?? "other",
+      title: storedTitle(row.title ?? `${brand} ${row.showType ?? ""}`),
+      notes: String(row.notes ?? "")
+    },
+    errors
+  };
 }
 
 function byDateDesc(a: ShowRecord, b: ShowRecord): number {

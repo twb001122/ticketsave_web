@@ -121,7 +121,81 @@ describe("calendar event store", () => {
         format: "standup",
         myRole: "host",
         showType: "openMic"
-      })
+    })
     ).toThrow("日历事件日期必须是有效的 YYYY-MM-DD。");
+  });
+
+  it("imports calendar JSON rows and summarizes created entities", async () => {
+    const store = await createDataStore({ inMemory: true });
+
+    const result = store.importCalendarRows([
+      {
+        date: "2026-04-18",
+        startTime: "20:00",
+        brand: "笑声工厂",
+        venue: "喜剧剧场",
+        city: "上海",
+        format: "单口",
+        myRole: "主持",
+        showType: "开放麦",
+        title: "周六开放麦",
+        notes: "带计时器"
+      }
+    ]);
+
+    expect(result.importedCount).toBe(1);
+    expect(result.createdBrands.map((brand) => brand.displayName)).toEqual(["笑声工厂"]);
+    expect(result.createdVenues.map((venue) => venue.displayName)).toEqual(["喜剧剧场"]);
+    expect(result.errors).toEqual([]);
+    expect(store.listCalendarEvents({ month: "2026-04" })[0].title).toBe("周六开放麦");
+  });
+
+  it("reports invalid calendar import rows without importing them", async () => {
+    const store = await createDataStore({ inMemory: true });
+
+    const result = store.importCalendarRows([
+      {
+        date: "2026/04/18",
+        startTime: "25:00",
+        brand: "",
+        venue: "喜剧剧场",
+        format: "脱口秀",
+        myRole: "主持",
+        showType: "开放麦"
+      }
+    ]);
+
+    expect(result.importedCount).toBe(0);
+    expect(result.skippedCount).toBe(1);
+    expect(result.errors.map((error) => error.field)).toContain("date");
+    expect(result.errors.map((error) => error.field)).toContain("brand");
+    expect(store.listCalendarEvents()).toEqual([]);
+  });
+
+  it("creates a ticket from a calendar event once", async () => {
+    const store = await createDataStore({ inMemory: true });
+    const brand = store.createBrand({ displayName: "笑声工厂", cityName: "上海" });
+    const venue = store.createVenue({ displayName: "喜剧剧场", cityName: "上海" });
+    const event = store.createCalendarEvent({
+      title: "周六开放麦",
+      eventDate: "2026-04-18",
+      startTime: "20:00",
+      brandID: brand.id,
+      venueID: venue.id,
+      format: "standup",
+      myRole: "opener",
+      showType: "competition",
+      notes: "比赛开场"
+    });
+
+    const show = store.createShowFromCalendarEvent(event.id);
+    expect(show.title).toBe("周六开放麦");
+    expect(show.date).toBe("2026-04-18T20:00:00.000");
+    expect(show.brandID).toBe(brand.id);
+    expect(show.venueID).toBe(venue.id);
+    expect(show.myRole).toBe("opener");
+    expect(show.showType).toBe("competition");
+    expect(store.listCalendarEvents()[0].createdShowID).toBe(show.id);
+    expect(() => store.createShowFromCalendarEvent(event.id)).toThrow("这条日历事件已经生成过票根。");
   });
 });
