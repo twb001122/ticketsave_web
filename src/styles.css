@@ -1,0 +1,648 @@
+:root {
+  color: #182125;
+  background: #fbfbf7;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, #fbfbf7 0%, #f4f8f4 48%, #eef7f6 100%);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button,
+.as-link {
+  border-radius: 8px;
+}
+
+.page {
+  width: min(1180px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 28px 0 64px;
+}
+
+.topbar,
+.admin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 36px;
+}
+
+.brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: #182125;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.brand-lockup img,
+.login-panel img,
+.empty-state img {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.archive-intro {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 28px;
+  align-items: end;
+  padding-bottom: 26px;
+  border-bottom: 1px solid #dce7e2;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: #e05d44;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+h1,
+h2,
+p {
+  overflow-wrap: anywhere;
+}
+
+h1 {
+  margin: 0;
+  max-width: 820px;
+  font-size: 2.8rem;
+  line-height: 1.08;
+  letter-spacing: 0;
+}
+
+h2 {
+  margin: 0;
+  letter-spacing: 0;
+}
+
+.stats-strip {
+  display: flex;
+  gap: 10px;
+}
+
+.stat {
+  min-width: 108px;
+  border: 1px solid #d6e4de;
+  background: #ffffff;
+  padding: 14px;
+  border-radius: 8px;
+}
+
+.stat strong {
+  display: block;
+  font-size: 1.8rem;
+}
+
+.stat span,
+.muted,
+.ticket-copy p,
+.admin-row span,
+.backup-panel p {
+  color: #66736f;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.chip,
+.ghost-button,
+.admin-tabs button,
+.admin-row button {
+  border: 1px solid #cfdfd9;
+  background: #ffffff;
+  color: #263236;
+  min-height: 40px;
+  padding: 9px 14px;
+  cursor: pointer;
+}
+
+.chip.active,
+.admin-tabs button.active {
+  background: #192b2c;
+  border-color: #192b2c;
+  color: #ffffff;
+}
+
+.ticket-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 18px;
+  margin-top: 28px;
+}
+
+.ticket-card {
+  display: grid;
+  grid-template-rows: 210px auto;
+  overflow: hidden;
+  border: 1px solid #d8e5df;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(33, 55, 50, 0.08);
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  appearance: none;
+  transform: translateY(0) scale(1);
+  transition:
+    transform 220ms ease,
+    box-shadow 220ms ease,
+    border-color 220ms ease,
+    background-color 220ms ease;
+  animation: ticketCardEnter 420ms ease both;
+  transform-origin: center bottom;
+}
+
+.ticket-card:hover,
+.ticket-card:focus-visible {
+  transform: translateY(-6px) scale(1.01);
+  border-color: #bfd7ce;
+  box-shadow: 0 24px 54px rgba(33, 55, 50, 0.14);
+}
+
+.ticket-card.is-pressing {
+  transform: translateY(-1px) scale(0.988);
+  box-shadow: 0 12px 24px rgba(33, 55, 50, 0.12);
+}
+
+.ticket-card:focus-visible {
+  outline: 2px solid #e05d44;
+  outline-offset: 3px;
+}
+
+.cover {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  background: #eaf4f1;
+  transform: scale(1);
+  transition: transform 320ms ease, filter 320ms ease;
+}
+
+.ticket-card:hover .cover,
+.ticket-card:focus-visible .cover {
+  transform: scale(1.035);
+  filter: saturate(1.05);
+}
+
+.cover-placeholder {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 18px;
+  background:
+    linear-gradient(135deg, #fefefe 0%, #e9f6f2 45%, #f9e5e0 100%);
+  color: #172527;
+}
+
+.cover-placeholder span {
+  color: #d85c44;
+  font-weight: 800;
+}
+
+.cover-placeholder strong {
+  font-size: 1.7rem;
+  line-height: 1.1;
+}
+
+.ticket-copy {
+  padding: 18px;
+  transition: transform 220ms ease;
+}
+
+.ticket-card:hover .ticket-copy,
+.ticket-card:focus-visible .ticket-copy {
+  transform: translateY(-2px);
+}
+
+.ticket-copy h2 {
+  font-size: 1.25rem;
+  margin-bottom: 8px;
+}
+
+.tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tag-row span {
+  border: 1px solid #d5e2dc;
+  background: #f7fbfa;
+  border-radius: 8px;
+  padding: 6px 9px;
+  color: #223134;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.tag-row.large span {
+  padding: 9px 12px;
+}
+
+.detail-page .ghost-button {
+  margin-bottom: 24px;
+}
+
+.detail-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 430px) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.detail-layout > .cover,
+.detail-layout > .cover-placeholder {
+  height: 560px;
+  border-radius: 8px;
+}
+
+.detail-main {
+  background: #ffffff;
+  border: 1px solid #dbe8e2;
+  border-radius: 8px;
+  padding: 28px;
+}
+
+.detail-list {
+  display: grid;
+  gap: 12px;
+  margin: 28px 0;
+}
+
+.detail-list div {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e3ece8;
+}
+
+dt {
+  color: #697772;
+  font-weight: 800;
+}
+
+dd {
+  margin: 0;
+}
+
+.public-notes {
+  border-left: 4px solid #e05d44;
+  padding-left: 16px;
+}
+
+.admin-login {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.login-panel,
+.editor-panel,
+.table-panel,
+.catalog-panel,
+.backup-panel {
+  background: #ffffff;
+  border: 1px solid #d9e6e0;
+  border-radius: 8px;
+  padding: 22px;
+  box-shadow: 0 16px 38px rgba(33, 55, 50, 0.08);
+}
+
+.login-panel {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 14px;
+}
+
+.admin-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 22px;
+}
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 430px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.editor-panel,
+.catalog-panel form {
+  display: grid;
+  gap: 12px;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  border: 1px solid #cdded7;
+  border-radius: 8px;
+  background: #fbfdfc;
+  color: #182125;
+  padding: 11px 12px;
+}
+
+textarea {
+  min-height: 130px;
+  resize: vertical;
+}
+
+.three-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.performer-picker {
+  display: grid;
+  gap: 12px;
+}
+
+.picker-trigger {
+  width: 100%;
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  border: 1px solid #cdded7;
+  border-radius: 8px;
+  background: #fbfdfc;
+  color: #182125;
+  padding: 14px 16px;
+  cursor: pointer;
+}
+
+.picker-label {
+  color: #66736f;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.selected-chip-list,
+.picker-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.selected-chip,
+.picker-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #d5e2dc;
+  background: #f7fbfa;
+  color: #223134;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-weight: 700;
+}
+
+.selected-chip span {
+  color: #7a8782;
+  font-size: 0.82rem;
+}
+
+.picker-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(20, 28, 30, 0.28);
+  backdrop-filter: blur(8px);
+}
+
+.picker-modal {
+  width: min(720px, 100%);
+  max-height: min(82vh, 760px);
+  overflow: auto;
+  display: grid;
+  gap: 14px;
+  border: 1px solid #d9e6e0;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 22px;
+  box-shadow: 0 24px 50px rgba(20, 32, 34, 0.16);
+}
+
+.picker-modal-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.picker-list {
+  display: grid;
+  gap: 10px;
+  max-height: 340px;
+  overflow: auto;
+}
+
+.picker-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  border: 1px solid #d5e2dc;
+  border-radius: 8px;
+  background: #fbfdfc;
+  color: #182125;
+  padding: 13px 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker-row strong,
+.picker-row span,
+.picker-row em {
+  display: block;
+}
+
+.picker-row span {
+  margin-top: 4px;
+  color: #6e7a76;
+  font-style: normal;
+}
+
+.picker-row em {
+  color: #6e7a76;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.picker-row.active {
+  border-color: #e05d44;
+  background: #fff5f2;
+}
+
+.picker-row.active em {
+  color: #d54d34;
+}
+
+.picker-create-panel {
+  display: grid;
+  gap: 10px;
+  border-top: 1px solid #e3ece8;
+  padding-top: 12px;
+}
+
+.primary-button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 42px;
+  border: 0;
+  background: #e05d44;
+  color: #ffffff;
+  font-weight: 800;
+  padding: 10px 16px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.danger {
+  color: #b72d23;
+}
+
+.admin-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid #e4ece9;
+}
+
+.admin-row div {
+  display: grid;
+  gap: 4px;
+}
+
+.admin-row.compact {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.entity-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.multi-select {
+  display: grid;
+  gap: 8px;
+  color: #66736f;
+  font-weight: 800;
+}
+
+.multi-select select {
+  min-height: 104px;
+}
+
+.check-line {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #263236;
+}
+
+.check-line input {
+  width: auto;
+}
+
+.backup-panel {
+  max-width: 620px;
+  display: grid;
+  gap: 16px;
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  gap: 12px;
+  margin-top: 34px;
+  padding: 36px;
+  border: 1px dashed #cdded7;
+  border-radius: 8px;
+}
+
+@keyframes ticketCardEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 820px) {
+  .archive-intro,
+  .detail-layout,
+  .admin-grid,
+  .entity-columns {
+    grid-template-columns: 1fr;
+  }
+
+  h1 {
+    font-size: 2.15rem;
+  }
+
+  .stats-strip {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .detail-layout > .cover,
+  .detail-layout > .cover-placeholder {
+    height: 360px;
+  }
+
+  .three-cols {
+    grid-template-columns: 1fr;
+  }
+}
