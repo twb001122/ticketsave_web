@@ -8,11 +8,15 @@ import {
   normalizeValue,
   storedTitle,
   venueLookupKey,
+  type CalendarEventInput,
+  type CalendarEventRecord,
+  type CalendarSource,
   type ArchiveSummary,
   type BackupPayload,
   type BackupShowRecord,
   type BrandRecord,
   type PerformerRecord,
+  type PublicCalendarEventSummary,
   type PublicShowSummary,
   type ShowFormat,
   type ShowRecord,
@@ -412,6 +416,74 @@ export class DataStore {
     this.persist();
   }
 
+  listCalendarEvents(filters: { month?: string } = {}): CalendarEventRecord[] {
+    const events = this.queryAll("SELECT * FROM calendar_events ORDER BY eventDate ASC, startTime ASC, updatedAt DESC").map((row) => this.calendarEventFromRow(row));
+    return filters.month ? events.filter((event) => event.eventDate.startsWith(`${filters.month}-`)) : events;
+  }
+
+  listPublicCalendarEvents(filters: { month?: string } = {}): PublicCalendarEventSummary[] {
+    return this.listCalendarEvents(filters).map((event) => this.toPublicCalendarEvent(event));
+  }
+
+  createCalendarEvent(input: CalendarEventInput): CalendarEventRecord {
+    const now = nowISO();
+    const event = this.calendarEventFromInput({
+      ...input,
+      id: uuidv4(),
+      createdShowID: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    this.db.run(
+      `INSERT INTO calendar_events
+       (id, title, eventDate, startTime, brandID, venueID, format, myRole, showType, notes, source, createdShowID, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      calendarEventParams(event)
+    );
+    this.persist();
+    return event;
+  }
+
+  updateCalendarEvent(id: string, input: CalendarEventInput): CalendarEventRecord {
+    const existing = this.requireCalendarEvent(id);
+    const updated = this.calendarEventFromInput({
+      ...existing,
+      ...input,
+      id,
+      createdShowID: existing.createdShowID,
+      createdAt: existing.createdAt,
+      updatedAt: nowISO()
+    });
+    this.db.run(
+      `UPDATE calendar_events SET
+       title = ?, eventDate = ?, startTime = ?, brandID = ?, venueID = ?, format = ?, myRole = ?, showType = ?,
+       notes = ?, source = ?, createdShowID = ?, updatedAt = ?
+       WHERE id = ?`,
+      [
+        updated.title,
+        updated.eventDate,
+        updated.startTime,
+        updated.brandID,
+        updated.venueID,
+        updated.format,
+        updated.myRole,
+        updated.showType,
+        updated.notes,
+        updated.source,
+        updated.createdShowID,
+        updated.updatedAt,
+        id
+      ]
+    );
+    this.persist();
+    return updated;
+  }
+
+  deleteCalendarEvent(id: string): void {
+    this.db.run("DELETE FROM calendar_events WHERE id = ?", [id]);
+    this.persist();
+  }
+
   getAdminSnapshot() {
     return {
       shows: this.listShows().sort(byDateDesc),
@@ -590,6 +662,22 @@ export class DataStore {
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS calendar_events (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        eventDate TEXT NOT NULL,
+        startTime TEXT NOT NULL,
+        brandID TEXT NOT NULL,
+        venueID TEXT NOT NULL,
+        format TEXT NOT NULL,
+        myRole TEXT NOT NULL,
+        showType TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL,
+        createdShowID TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS show_performers (showID TEXT NOT NULL, performerID TEXT NOT NULL, sortOrder INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS performer_brands (performerID TEXT NOT NULL, brandID TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS brand_performers (brandID TEXT NOT NULL, performerID TEXT NOT NULL);
@@ -689,6 +777,25 @@ export class DataStore {
     };
   }
 
+  private calendarEventFromRow(row: Row): CalendarEventRecord {
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      eventDate: String(row.eventDate),
+      startTime: String(row.startTime),
+      brandID: String(row.brandID),
+      venueID: String(row.venueID),
+      format: String(row.format) as ShowFormat,
+      myRole: String(row.myRole) as ShowRole,
+      showType: String(row.showType) as ShowType,
+      notes: String(row.notes ?? ""),
+      source: String(row.source) as CalendarSource,
+      createdShowID: nullable(row.createdShowID),
+      createdAt: String(row.createdAt),
+      updatedAt: String(row.updatedAt)
+    };
+  }
+
   private toPublicShow(show: ShowRecord, includeNotes: boolean): PublicShowSummary {
     const brand = show.brandID ? this.listBrands().find((item) => item.id === show.brandID) ?? null : null;
     const venue = show.venueID ? this.listVenues().find((item) => item.id === show.venueID) ?? null : null;
@@ -715,6 +822,59 @@ export class DataStore {
     const show = this.getShow(id);
     if (!show) throw new Error("演出不存在。");
     return show;
+  }
+
+  private toPublicCalendarEvent(event: CalendarEventRecord): PublicCalendarEventSummary {
+    const brand = this.listBrands().find((item) => item.id === event.brandID);
+    const venue = this.listVenues().find((item) => item.id === event.venueID);
+    if (!brand) throw new Error("日历事件关联的厂牌不存在。");
+    if (!venue) throw new Error("日历事件关联的场地不存在。");
+    return {
+      id: event.id,
+      title: event.title,
+      eventDate: event.eventDate,
+      startTime: event.startTime,
+      format: event.format,
+      myRole: event.myRole,
+      showType: event.showType,
+      brand: { id: brand.id, displayName: brand.displayName, cityName: brand.cityName },
+      venue: { id: venue.id, displayName: venue.displayName, cityName: venue.cityName, district: venue.district },
+      notes: event.notes
+    };
+  }
+
+  private requireCalendarEvent(id: string): CalendarEventRecord {
+    const event = this.listCalendarEvents().find((item) => item.id === id);
+    if (!event) throw new Error("日历事件不存在。");
+    return event;
+  }
+
+  private calendarEventFromInput(input: CalendarEventInput & {
+    id: string;
+    createdShowID: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }): CalendarEventRecord {
+    const eventDate = requireDate(input.eventDate);
+    const startTime = requireTime(input.startTime);
+    if (!input.brandID) throw new Error("日历事件厂牌不能为空。");
+    if (!input.venueID) throw new Error("日历事件场地不能为空。");
+    return {
+      id: input.id,
+      title: storedTitle(input.title ?? ""),
+      eventDate,
+      startTime,
+      brandID: input.brandID,
+      venueID: input.venueID,
+      format: input.format ?? "standup",
+      myRole: input.myRole ?? "performer",
+      showType: input.showType ?? "showcase",
+      notes: input.notes ?? "",
+      source: input.source ?? "manual",
+      createdShowID: input.createdShowID,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt
+    };
   }
 
   private replaceShowPerformers(showID: string, performerIDs: string[]): void {
@@ -773,6 +933,25 @@ function showParams(show: ShowRecord): RowValue[] {
   ];
 }
 
+function calendarEventParams(event: CalendarEventRecord): RowValue[] {
+  return [
+    event.id,
+    event.title,
+    event.eventDate,
+    event.startTime,
+    event.brandID,
+    event.venueID,
+    event.format,
+    event.myRole,
+    event.showType,
+    event.notes,
+    event.source,
+    event.createdShowID,
+    event.createdAt,
+    event.updatedAt
+  ];
+}
+
 function nullable(value: RowValue | undefined): string | null {
   if (value === null || value === undefined) return null;
   const stringValue = String(value);
@@ -793,6 +972,22 @@ function requiredName(value: string, label: string): string {
   const trimmed = value.trim();
   if (!trimmed) throw new Error(`${label}名称不能为空。`);
   return trimmed;
+}
+
+function requireDate(value: string | undefined): string {
+  const date = String(value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+    throw new Error("日历事件日期必须是 YYYY-MM-DD。");
+  }
+  return date;
+}
+
+function requireTime(value: string | undefined): string {
+  const time = String(value ?? "").trim();
+  if (!/^\d{2}:\d{2}$/.test(time)) throw new Error("日历事件开始时间必须是 HH:mm。");
+  const [hour, minute] = time.split(":").map(Number);
+  if (hour > 23 || minute > 59) throw new Error("日历事件开始时间必须是有效的 HH:mm。");
+  return time;
 }
 
 function byDateDesc(a: ShowRecord, b: ShowRecord): number {
