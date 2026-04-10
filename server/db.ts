@@ -485,10 +485,8 @@ export class DataStore {
 
   listUpcomingPublicCalendarEvents(days: number): PublicCalendarEventSummary[] {
     const now = new Date();
-    const end = new Date(now);
-    end.setDate(end.getDate() + Math.max(1, days));
     const startDate = localDateKey(now);
-    const endDate = localDateKey(end);
+    const endDate = addCalendarDays(startDate, Math.max(1, days));
     return this.listCalendarEvents()
       .filter((event) => event.eventDate >= startDate && event.eventDate <= endDate)
       .map((event) => this.toPublicCalendarEvent(event));
@@ -1067,6 +1065,16 @@ function localDateKey(date: Date): string {
   const day = parts.find((part) => part.type === "day")?.value;
   if (!year || !month || !day) throw new Error("无法格式化日历日期。");
   return `${year}-${month}-${day}`;
+}
+
+function addCalendarDays(dateKey: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!match) throw new Error("无法格式化日历日期。");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+  return localDateKey(shifted);
 }
 
 function nullable(value: RowValue | undefined): string | null {

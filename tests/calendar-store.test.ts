@@ -53,9 +53,9 @@ describe("calendar event store", () => {
     expect(events[0].venue.district).toBe("静安");
   });
 
-  it("uses local dates for upcoming public calendar events", async () => {
+  it("uses Shanghai calendar arithmetic for upcoming public calendar events", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-10T16:30:00Z"));
+    vi.setSystemTime(new Date("2026-03-07T16:30:00Z"));
 
     try {
       const store = await createDataStore({ inMemory: true });
@@ -63,8 +63,8 @@ describe("calendar event store", () => {
       const venue = store.createVenue({ displayName: "喜剧剧场", cityName: "上海" });
 
       store.createCalendarEvent({
-        title: "前一天",
-        eventDate: "2026-04-10",
+        title: "窗口起始日",
+        eventDate: "2026-03-08",
         startTime: "20:00",
         brandID: brand.id,
         venueID: venue.id,
@@ -73,8 +73,8 @@ describe("calendar event store", () => {
         showType: "openMic"
       });
       store.createCalendarEvent({
-        title: "今天",
-        eventDate: "2026-04-11",
+        title: "窗口末日",
+        eventDate: "2026-03-15",
         startTime: "20:00",
         brandID: brand.id,
         venueID: venue.id,
@@ -83,8 +83,8 @@ describe("calendar event store", () => {
         showType: "openMic"
       });
       store.createCalendarEvent({
-        title: "第七天",
-        eventDate: "2026-04-18",
+        title: "窗口外一天",
+        eventDate: "2026-03-16",
         startTime: "20:00",
         brandID: brand.id,
         venueID: venue.id,
@@ -94,9 +94,9 @@ describe("calendar event store", () => {
       });
 
       const events = store.listUpcomingPublicCalendarEvents(7);
-      expect(events.map((event) => event.eventDate)).toContain("2026-04-11");
-      expect(events.map((event) => event.eventDate)).toContain("2026-04-18");
-      expect(events.map((event) => event.eventDate)).not.toContain("2026-04-10");
+      expect(events.map((event) => event.eventDate)).toContain("2026-03-08");
+      expect(events.map((event) => event.eventDate)).toContain("2026-03-15");
+      expect(events.map((event) => event.eventDate)).not.toContain("2026-03-16");
     } finally {
       vi.useRealTimers();
     }
