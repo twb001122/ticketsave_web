@@ -8,7 +8,7 @@ const modules = [
   { title: "票根精选", body: "回看已经发生的现场。", path: "/tickets", enabled: true },
   { title: "本周演出日历", body: "看看接下来在哪上台。", path: "/calendar", enabled: true },
   { title: "留言精选", body: "第二期开放。", path: "/guestbook", enabled: false },
-  { title: "喜剧日记", body: "第二期开放。", path: "/diary", enabled: false },
+  { title: "日记精选", body: "第二期开放。", path: "/diary", enabled: false },
   { title: "马达和他的朋友们", body: "第三期开放。", path: "/friends", enabled: false }
 ];
 
