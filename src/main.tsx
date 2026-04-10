@@ -202,7 +202,7 @@ function ShowDetail({ id }: { id: string }) {
 
   return (
     <main className="page detail-page">
-      <button className="ghost-button" onClick={() => navigate("/")}>返回票根墙</button>
+      <button className="ghost-button" onClick={() => navigate("/tickets")}>返回票根墙</button>
       <section className="detail-layout">
         <CoverImage show={show} />
         <div className="detail-main">
