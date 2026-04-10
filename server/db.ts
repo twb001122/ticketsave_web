@@ -345,6 +345,9 @@ export class DataStore {
     if (this.queryOne("SELECT id FROM shows WHERE brandID = ? LIMIT 1", [id])) {
       throw new Error("厂牌仍被演出引用，暂时不能删除。");
     }
+    if (this.queryOne("SELECT id FROM calendar_events WHERE brandID = ? LIMIT 1", [id])) {
+      throw new Error("厂牌仍被日历事件引用，暂时不能删除。");
+    }
     this.db.run("DELETE FROM brands WHERE id = ?", [id]);
     this.db.run("DELETE FROM performer_brands WHERE brandID = ?", [id]);
     this.db.run("DELETE FROM brand_performers WHERE brandID = ?", [id]);
@@ -409,6 +412,9 @@ export class DataStore {
   deleteVenue(id: string): void {
     if (this.queryOne("SELECT id FROM shows WHERE venueID = ? LIMIT 1", [id])) {
       throw new Error("场地仍被演出引用，暂时不能删除。");
+    }
+    if (this.queryOne("SELECT id FROM calendar_events WHERE venueID = ? LIMIT 1", [id])) {
+      throw new Error("场地仍被日历事件引用，暂时不能删除。");
     }
     this.db.run("DELETE FROM venues WHERE id = ?", [id]);
     this.db.run("DELETE FROM brand_venues WHERE venueID = ?", [id]);
@@ -565,6 +571,7 @@ export class DataStore {
     this.db.run("DELETE FROM brand_performers");
     this.db.run("DELETE FROM brand_venues");
     this.db.run("DELETE FROM venue_performers");
+    this.db.run("DELETE FROM calendar_events");
     this.db.run("DELETE FROM shows");
     this.db.run("DELETE FROM performers");
     this.db.run("DELETE FROM brands");
@@ -976,8 +983,17 @@ function requiredName(value: string, label: string): string {
 
 function requireDate(value: string | undefined): string {
   const date = String(value ?? "").trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new Error("日历事件日期必须是 YYYY-MM-DD。");
+  }
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error("日历事件日期必须是有效的 YYYY-MM-DD。");
   }
   return date;
 }
