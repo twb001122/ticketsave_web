@@ -12,8 +12,8 @@ const sampleShow: PublicShowSummary = {
   coverFileName: null,
   date: "2026-04-09T12:00:00Z",
   format: "standup",
-  myRole: "performer",
-  showType: "showcase",
+  myRole: "opener",
+  showType: "competition",
   brand: null,
   venue: null,
   performers: []
@@ -25,6 +25,8 @@ describe("TicketCard interactions", () => {
 
     const card = screen.getByRole("button", { name: /动画测试演出/i });
     expect(card.className).not.toContain("is-pressing");
+    screen.getByText("开场");
+    screen.getByText("比赛");
 
     fireEvent.mouseDown(card);
     expect(card.className).toContain("is-pressing");

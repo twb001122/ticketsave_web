@@ -1,6 +1,6 @@
 export const showFormats = ["standup", "manzai", "improv", "sketch", "other"] as const;
-export const showRoles = ["host", "performer", "headliner", "other"] as const;
-export const showTypes = ["openMic", "commercial", "showcase", "special", "other"] as const;
+export const showRoles = ["host", "performer", "headliner", "opener", "other"] as const;
+export const showTypes = ["openMic", "commercial", "showcase", "special", "competition", "other"] as const;
 export const showStatuses = ["published", "draft"] as const;
 
 export type ShowFormat = (typeof showFormats)[number];
@@ -20,6 +20,7 @@ export const roleLabels: Record<ShowRole, string> = {
   host: "主持",
   performer: "演员",
   headliner: "主咖",
+  opener: "开场",
   other: "其他"
 };
 
@@ -28,6 +29,7 @@ export const typeLabels: Record<ShowType, string> = {
   commercial: "商演",
   showcase: "主打秀",
   special: "专场",
+  competition: "比赛",
   other: "其他"
 };
 
@@ -149,6 +151,73 @@ export interface ArchiveSummary {
   typeCounts: Record<string, number>;
   brandCounts: Record<string, number>;
   brands: Pick<BrandRecord, "id" | "displayName">[];
+}
+
+export const calendarSources = ["manual", "import"] as const;
+export type CalendarSource = (typeof calendarSources)[number];
+
+export interface CalendarEventRecord {
+  id: string;
+  title: string;
+  eventDate: string;
+  startTime: string;
+  brandID: string;
+  venueID: string;
+  format: ShowFormat;
+  myRole: ShowRole;
+  showType: ShowType;
+  notes: string;
+  source: CalendarSource;
+  createdShowID: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CalendarEventInput {
+  title?: string;
+  eventDate?: string;
+  startTime?: string;
+  brandID?: string;
+  venueID?: string;
+  format?: ShowFormat;
+  myRole?: ShowRole;
+  showType?: ShowType;
+  notes?: string;
+  source?: CalendarSource;
+}
+
+export interface PublicCalendarEventSummary {
+  id: string;
+  title: string;
+  eventDate: string;
+  startTime: string;
+  format: ShowFormat;
+  myRole: ShowRole;
+  showType: ShowType;
+  brand: Pick<BrandRecord, "id" | "displayName" | "cityName">;
+  venue: Pick<VenueRecord, "id" | "displayName" | "cityName" | "district">;
+  notes: string;
+}
+
+export interface CalendarImportRow {
+  date: string;
+  startTime: string;
+  brand: string;
+  venue: string;
+  city?: string;
+  format: string;
+  myRole: string;
+  showType: string;
+  title?: string;
+  notes?: string;
+}
+
+export interface CalendarImportResult {
+  importedCount: number;
+  skippedCount: number;
+  createdBrands: Pick<BrandRecord, "id" | "displayName">[];
+  createdVenues: Pick<VenueRecord, "id" | "displayName" | "cityName">[];
+  errors: { row: number; field: string; message: string }[];
 }
 
 export function normalizeValue(rawValue: string): string {
