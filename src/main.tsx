@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { fetchJSON } from "./api";
+import { ComingSoonPage } from "./coming-soon";
 import { PerformerPicker } from "./performer-picker";
+import { HomePage } from "./home-page";
 import {
   formatLabels,
   roleLabels,
@@ -36,6 +39,11 @@ function routeFromLocation(): Route {
   const showMatch = path.match(/^\/shows\/([^/]+)/);
   if (showMatch) return { path: "/shows/:id", params: { id: showMatch[1] } };
   if (path.startsWith("/admin")) return { path: "/admin", params: {} };
+  if (path.startsWith("/tickets")) return { path: "/tickets", params: {} };
+  if (path.startsWith("/calendar")) return { path: "/calendar", params: {} };
+  if (path.startsWith("/guestbook")) return { path: "/guestbook", params: {} };
+  if (path.startsWith("/diary")) return { path: "/diary", params: {} };
+  if (path.startsWith("/friends")) return { path: "/friends", params: {} };
   return { path: "/", params: {} };
 }
 
@@ -55,7 +63,12 @@ export function App() {
 
   if (route.path === "/admin") return <AdminApp />;
   if (route.path === "/shows/:id") return <ShowDetail id={route.params.id} />;
-  return <ArchiveWall />;
+  if (route.path === "/tickets") return <ArchiveWall />;
+  if (route.path === "/calendar") return <ComingSoonPage title="演出日历" onNavigate={navigate} />;
+  if (route.path === "/guestbook") return <ComingSoonPage title="留言板" onNavigate={navigate} />;
+  if (route.path === "/diary") return <ComingSoonPage title="喜剧日记" onNavigate={navigate} />;
+  if (route.path === "/friends") return <ComingSoonPage title="马达和他的朋友们" onNavigate={navigate} />;
+  return <HomePage onNavigate={navigate} />;
 }
 
 function ArchiveWall() {
@@ -515,12 +528,6 @@ async function deleteItem(url: string, onChanged: () => void) {
   const response = await fetch(url, { method: "DELETE" });
   if (!response.ok) return alert((await response.json()).error ?? "删除失败");
   onChanged();
-}
-
-async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  if (!response.ok) throw new Error((await response.json()).error ?? "请求失败");
-  return response.json() as Promise<T>;
 }
 
 function showError(error: unknown): void {
