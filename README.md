@@ -42,7 +42,7 @@ cp .env.example .env
 
 ```env
 PORT=3008
-DATA_DIR=/www/wwwroot/xysg-data
+DATA_DIR=/app/data
 ADMIN_PASSWORD=换成你的管理密码
 SESSION_SECRET=换成随机长字符串
 UPLOAD_LIMIT_MB=256
@@ -74,8 +74,7 @@ cd /opt/ticketsave_web
 git fetch origin
 git checkout main
 git pull --ff-only origin main
-npm ci
-npm run build
+docker exec xysg-web sh -lc 'cd /app && npm ci && npm run build'
 docker restart xysg-web
 ```
 
@@ -86,7 +85,7 @@ docker restart xysg-web
 
 ```env
 PORT=3008
-DATA_DIR=/www/wwwroot/xysg-data
+DATA_DIR=./data
 ADMIN_PASSWORD=换成你的管理密码
 SESSION_SECRET=换成随机长字符串
 UPLOAD_LIMIT_MB=256
