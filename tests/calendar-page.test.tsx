@@ -44,30 +44,33 @@ describe("CalendarPage", () => {
   });
 
   it("resets the selected day when the month changes", async () => {
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    let resolveNextMonth: ((value: Response) => void) | null = null;
+    vi.spyOn(globalThis, "fetch").mockImplementation((input) => {
       const url = String(input);
-      const items =
-        url.includes("month=2026-04") ?
-          [
-            {
-              id: "event-1",
-              title: "周六开放麦",
-              eventDate: "2026-04-18",
-              startTime: "20:00",
-              format: "standup",
-              myRole: "host",
-              showType: "openMic",
-              brand: { id: "brand-1", displayName: "笑声工厂", cityName: "上海" },
-              venue: { id: "venue-1", displayName: "喜剧剧场", cityName: "上海", district: "静安" },
-              notes: "带计时器"
-            }
-          ] :
-          [];
-
-      return {
-        ok: true,
-        json: async () => ({ items })
-      } as Response;
+      if (url.includes("month=2026-04")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            items: [
+              {
+                id: "event-1",
+                title: "周六开放麦",
+                eventDate: "2026-04-18",
+                startTime: "20:00",
+                format: "standup",
+                myRole: "host",
+                showType: "openMic",
+                brand: { id: "brand-1", displayName: "笑声工厂", cityName: "上海" },
+                venue: { id: "venue-1", displayName: "喜剧剧场", cityName: "上海", district: "静安" },
+                notes: "带计时器"
+              }
+            ]
+          })
+        } as Response);
+      }
+      return new Promise<Response>((resolve) => {
+        resolveNextMonth = resolve;
+      });
     });
 
     const user = userEvent.setup();
@@ -78,9 +81,13 @@ describe("CalendarPage", () => {
     expect(screen.getByRole("heading", { name: /2026-04-18 的演出/ })).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "下个月" }));
-
-    await waitFor(() => expect(screen.queryByRole("heading", { name: /2026-04-18 的演出/ })).toBeNull());
+    expect(screen.queryByRole("heading", { name: /2026-04-18 的演出/ })).toBeNull();
     expect(screen.getByRole("heading", { name: "选择一个有演出的日子" })).toBeTruthy();
+
+    resolveNextMonth?.({
+      ok: true,
+      json: async () => ({ items: [] })
+    } as Response);
   });
 
   it("uses the local month at the Shanghai month boundary", async () => {

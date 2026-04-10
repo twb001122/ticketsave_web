@@ -17,10 +17,22 @@ export function CalendarPage({
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     fetchJSON<{ items: PublicCalendarEventSummary[] }>(`/api/public/calendar?month=${month}`)
-      .then((data) => setEvents(data.items))
+      .then((data) => {
+        if (active) setEvents(data.items);
+      })
       .catch((error) => console.error(error));
+    return () => {
+      active = false;
+    };
   }, [month]);
+
+  function changeMonth(delta: number): void {
+    setSelectedDate(null);
+    setEvents([]);
+    setMonth((currentMonth) => shiftMonth(currentMonth, delta));
+  }
 
   const days = useMemo(() => monthGrid(month), [month]);
   const eventsByDate = useMemo(() => groupEventsByDate(events), [events]);
@@ -53,11 +65,11 @@ export function CalendarPage({
       </section>
 
       <section className="calendar-toolbar" aria-label="切换月份和视图">
-        <button type="button" className="chip" onClick={() => setMonth(shiftMonth(month, -1))}>
+        <button type="button" className="chip" onClick={() => changeMonth(-1)}>
           上个月
         </button>
         <strong>{formatMonthLabel(month)}</strong>
-        <button type="button" className="chip" onClick={() => setMonth(shiftMonth(month, 1))}>
+        <button type="button" className="chip" onClick={() => changeMonth(1)}>
           下个月
         </button>
         <button type="button" className={mode === "month" ? "chip active" : "chip"} onClick={() => setMode("month")}>
@@ -161,5 +173,13 @@ function formatMonthLabel(month: string): string {
 }
 
 export function currentMonthKey(date = new Date()): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit"
+  });
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value ?? String(date.getFullYear());
+  const month = parts.find((part) => part.type === "month")?.value ?? String(date.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
 }
