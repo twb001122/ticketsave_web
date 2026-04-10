@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDataStore } from "../server/db.js";
 
 describe("calendar event store", () => {
@@ -51,6 +51,55 @@ describe("calendar event store", () => {
     expect(events[0].brand.displayName).toBe("笑声工厂");
     expect(events[0].venue.displayName).toBe("喜剧剧场");
     expect(events[0].venue.district).toBe("静安");
+  });
+
+  it("uses local dates for upcoming public calendar events", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-11T00:30:00+08:00"));
+
+    try {
+      const store = await createDataStore({ inMemory: true });
+      const brand = store.createBrand({ displayName: "笑声工厂", cityName: "上海" });
+      const venue = store.createVenue({ displayName: "喜剧剧场", cityName: "上海" });
+
+      store.createCalendarEvent({
+        title: "前一天",
+        eventDate: "2026-04-10",
+        startTime: "20:00",
+        brandID: brand.id,
+        venueID: venue.id,
+        format: "standup",
+        myRole: "host",
+        showType: "openMic"
+      });
+      store.createCalendarEvent({
+        title: "今天",
+        eventDate: "2026-04-11",
+        startTime: "20:00",
+        brandID: brand.id,
+        venueID: venue.id,
+        format: "standup",
+        myRole: "host",
+        showType: "openMic"
+      });
+      store.createCalendarEvent({
+        title: "第七天",
+        eventDate: "2026-04-18",
+        startTime: "20:00",
+        brandID: brand.id,
+        venueID: venue.id,
+        format: "standup",
+        myRole: "host",
+        showType: "openMic"
+      });
+
+      const events = store.listUpcomingPublicCalendarEvents(7);
+      expect(events.map((event) => event.eventDate)).toContain("2026-04-11");
+      expect(events.map((event) => event.eventDate)).toContain("2026-04-18");
+      expect(events.map((event) => event.eventDate)).not.toContain("2026-04-10");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("clears calendar events when restoring from backup", async () => {

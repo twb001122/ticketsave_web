@@ -479,8 +479,8 @@ export class DataStore {
     const now = new Date();
     const end = new Date(now);
     end.setDate(end.getDate() + Math.max(1, days));
-    const startDate = now.toISOString().slice(0, 10);
-    const endDate = end.toISOString().slice(0, 10);
+    const startDate = localDateKey(now);
+    const endDate = localDateKey(end);
     return this.listCalendarEvents()
       .filter((event) => event.eventDate >= startDate && event.eventDate <= endDate)
       .map((event) => this.toPublicCalendarEvent(event));
@@ -1050,6 +1050,13 @@ function calendarEventParams(event: CalendarEventRecord): RowValue[] {
     event.createdAt,
     event.updatedAt
   ];
+}
+
+function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function nullable(value: RowValue | undefined): string | null {
