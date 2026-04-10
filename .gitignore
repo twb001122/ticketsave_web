@@ -4,5 +4,6 @@ dist/
 data/
 .env
 .superpowers/
+.worktrees/
 *.zip
 *.tar.gz
