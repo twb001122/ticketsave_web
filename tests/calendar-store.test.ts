@@ -55,7 +55,7 @@ describe("calendar event store", () => {
 
   it("uses local dates for upcoming public calendar events", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-04-11T00:30:00+08:00"));
+    vi.setSystemTime(new Date("2026-04-10T16:30:00Z"));
 
     try {
       const store = await createDataStore({ inMemory: true });

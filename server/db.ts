@@ -34,6 +34,14 @@ import {
 type RowValue = string | number | Uint8Array | null;
 type Row = Record<string, RowValue>;
 
+const calendarTimeZone = "Asia/Shanghai";
+const calendarDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: calendarTimeZone,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
+
 export interface DataStoreOptions {
   inMemory?: boolean;
   dataDir?: string;
@@ -1053,9 +1061,11 @@ function calendarEventParams(event: CalendarEventRecord): RowValue[] {
 }
 
 function localDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const parts = calendarDateFormatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) throw new Error("无法格式化日历日期。");
   return `${year}-${month}-${day}`;
 }
 
