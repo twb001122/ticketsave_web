@@ -15,6 +15,20 @@ export interface ServerAppOptions {
 
 const uploadLimitMB = Number(process.env.UPLOAD_LIMIT_MB ?? 256);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: uploadLimitMB * 1024 * 1024 } });
+const calendarImportTemplate = [
+  {
+    date: "2026-04-18",
+    startTime: "20:00",
+    brand: "某某喜剧",
+    venue: "某某剧场",
+    city: "上海",
+    format: "单口",
+    myRole: "主持",
+    showType: "开放麦",
+    title: "周六开放麦",
+    notes: "可选备注"
+  }
+];
 
 export async function createServerApp(options: ServerAppOptions) {
   const app = express();
@@ -52,6 +66,19 @@ export async function createServerApp(options: ServerAppOptions) {
     const show = options.store.getPublicShow(req.params.id);
     if (!show) return res.status(404).json({ error: "演出不存在。" });
     res.json(show);
+  });
+
+  app.get("/api/public/calendar", (req, res) => {
+    res.json({
+      items: options.store.listPublicCalendarEvents({
+        month: typeof req.query.month === "string" ? req.query.month : undefined
+      })
+    });
+  });
+
+  app.get("/api/public/calendar/upcoming", (req, res) => {
+    const days = Number(req.query.days ?? 7);
+    res.json({ items: options.store.listUpcomingPublicCalendarEvents(days) });
   });
 
   app.get("/covers/:fileName", (req, res) => {
@@ -127,6 +154,56 @@ export async function createServerApp(options: ServerAppOptions) {
     create: (body) => options.store.createVenue(parseBody(body)),
     update: (id, body) => options.store.updateVenue(id, parseBody(body)),
     delete: (id) => options.store.deleteVenue(id)
+  });
+
+  app.get("/api/admin/calendar", requireAdmin, (_req, res) => {
+    res.json({ items: options.store.listCalendarEvents() });
+  });
+
+  app.post("/api/admin/calendar", requireAdmin, (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createCalendarEvent(parseBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/admin/calendar/:id", requireAdmin, (req, res, next) => {
+    try {
+      res.json(options.store.updateCalendarEvent(String(req.params.id), parseBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/admin/calendar/:id", requireAdmin, (req, res, next) => {
+    try {
+      options.store.deleteCalendarEvent(String(req.params.id));
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/admin/calendar/import-template", requireAdmin, (_req, res) => {
+    res.json(calendarImportTemplate);
+  });
+
+  app.post("/api/admin/calendar/import", requireAdmin, (req, res, next) => {
+    try {
+      if (!Array.isArray(req.body)) return res.status(400).json({ error: "导入内容必须是 JSON 数组。" });
+      res.json(options.store.importCalendarRows(req.body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/admin/calendar/:id/create-show", requireAdmin, (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createShowFromCalendarEvent(String(req.params.id)));
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.post("/api/admin/backup/import", requireAdmin, upload.single("archive"), async (req, res, next) => {

@@ -475,6 +475,17 @@ export class DataStore {
     return this.listCalendarEvents(filters).map((event) => this.toPublicCalendarEvent(event));
   }
 
+  listUpcomingPublicCalendarEvents(days: number): PublicCalendarEventSummary[] {
+    const now = new Date();
+    const end = new Date(now);
+    end.setDate(end.getDate() + Math.max(1, days));
+    const startDate = now.toISOString().slice(0, 10);
+    const endDate = end.toISOString().slice(0, 10);
+    return this.listCalendarEvents()
+      .filter((event) => event.eventDate >= startDate && event.eventDate <= endDate)
+      .map((event) => this.toPublicCalendarEvent(event));
+  }
+
   createCalendarEvent(input: CalendarEventInput): CalendarEventRecord {
     const now = nowISO();
     const event = this.calendarEventFromInput({
