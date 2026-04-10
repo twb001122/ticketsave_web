@@ -21,6 +21,14 @@ interface CalendarAdminProps {
   onChanged: () => void;
 }
 
+export function chooseCalendarAdminForm(
+  editing: CalendarEventRecord | null,
+  emptyForm: CalendarEventForm,
+  currentForm: CalendarEventForm
+): CalendarEventForm {
+  return editing ? currentForm : emptyForm;
+}
+
 type CalendarEventForm = {
   title: string;
   eventDate: string;
@@ -56,8 +64,8 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
   const [importResult, setImportResult] = useState("");
 
   useEffect(() => {
-    setForm(emptyForm);
-  }, [emptyForm]);
+    setForm((currentForm) => chooseCalendarAdminForm(editing, emptyForm, currentForm));
+  }, [emptyForm, editing]);
 
   useEffect(() => {
     refresh();
