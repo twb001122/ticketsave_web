@@ -11,7 +11,7 @@ export function CalendarPage({
   onNavigate: (path: string) => void;
   initialMonth?: string;
 }) {
-  const [month, setMonth] = useState(initialMonth ?? new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(initialMonth ?? currentMonthKey());
   const [mode, setMode] = useState<ViewMode>("month");
   const [events, setEvents] = useState<PublicCalendarEventSummary[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -22,14 +22,18 @@ export function CalendarPage({
       .catch((error) => console.error(error));
   }, [month]);
 
-  useEffect(() => {
-    if (selectedDate || events.length === 0) return;
-    setSelectedDate(events[0].eventDate);
-  }, [events, selectedDate]);
-
   const days = useMemo(() => monthGrid(month), [month]);
   const eventsByDate = useMemo(() => groupEventsByDate(events), [events]);
   const selectedEvents = selectedDate ? eventsByDate.get(selectedDate) ?? [] : [];
+
+  useEffect(() => {
+    if (events.length === 0) {
+      setSelectedDate(null);
+      return;
+    }
+    if (selectedDate && eventsByDate.has(selectedDate)) return;
+    setSelectedDate(events[0].eventDate);
+  }, [events, eventsByDate, selectedDate]);
 
   return (
     <main className="page calendar-page">
@@ -154,4 +158,8 @@ function shiftMonth(month: string, delta: number): string {
 function formatMonthLabel(month: string): string {
   const [year, monthIndex] = month.split("-").map(Number);
   return `${year} 年 ${monthIndex} 月`;
+}
+
+export function currentMonthKey(date = new Date()): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
