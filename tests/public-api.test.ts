@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 import request from "supertest";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { createServerApp } from "../server/app.js";
 import { createDataStore } from "../server/db.js";
 
@@ -82,5 +85,17 @@ describe("public and admin API boundaries", () => {
       .post("/api/admin/backup/import")
       .attach("archive", archive, "large-xysg-backup.zip")
       .expect(200);
+  });
+
+  it("serves the SPA shell for public client routes", async () => {
+    const staticDir = await mkdtemp(path.join(os.tmpdir(), ".xysg-static-"));
+    await writeFile(path.join(staticDir, "index.html"), "<!doctype html><title>SPA shell</title>");
+    const store = await createDataStore({ inMemory: true });
+    const app = await createServerApp({ store, adminPassword: "secret", sessionSecret: "test-secret", staticDir });
+
+    const response = await request(app).get("/calendar").expect(200);
+
+    expect(response.text).toContain("SPA shell");
+    await request(app).get("/api/not-real").expect(404);
   });
 });

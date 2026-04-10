@@ -230,9 +230,12 @@ export async function createServerApp(options: ServerAppOptions) {
   });
 
   if (options.staticDir) {
+    app.get(/^(?!\/api|\/covers)(?!.*\.[^/]+$).*/, (_req, res) => {
+      res.sendFile("index.html", { root: options.staticDir });
+    });
     app.use(express.static(options.staticDir));
     app.get(/^(?!\/api|\/covers).*/, (_req, res) => {
-      res.sendFile(path.join(options.staticDir!, "index.html"));
+      res.sendFile("index.html", { root: options.staticDir });
     });
   }
 
