@@ -14,5 +14,6 @@ describe("HomePage", () => {
     expect(screen.getByRole("button", { name: /本周演出日历/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /留言精选/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /日记精选/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /留言精选/i }).textContent).not.toContain("即将开放");
   });
 });

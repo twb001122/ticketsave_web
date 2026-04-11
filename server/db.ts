@@ -16,6 +16,10 @@ import {
   type CalendarImportRow,
   type CalendarEventRecord,
   type CalendarSource,
+  type GuestbookMessageInput,
+  type GuestbookMessageRecord,
+  type GuestbookPageResult,
+  type GuestbookStatus,
   type ArchiveSummary,
   type BackupPayload,
   type BackupShowRecord,
@@ -571,6 +575,52 @@ export class DataStore {
     this.persist();
   }
 
+  listGuestbookMessages(): GuestbookMessageRecord[] {
+    return this.queryAll("SELECT * FROM guestbook_messages ORDER BY createdAt DESC").map((row) => this.guestbookMessageFromRow(row));
+  }
+
+  listPublicGuestbookMessages({ limit = 10, offset = 0 }: { limit?: number; offset?: number } = {}): GuestbookPageResult {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    const safeOffset = Math.max(0, Math.floor(offset));
+    const rows = this.queryAll(
+      "SELECT * FROM guestbook_messages WHERE status = 'approved' ORDER BY createdAt DESC LIMIT ? OFFSET ?",
+      [safeLimit + 1, safeOffset]
+    ).map((row) => this.guestbookMessageFromRow(row));
+    const items = rows.slice(0, safeLimit).map((message) => this.toPublicGuestbookMessage(message));
+    const hasMore = rows.length > safeLimit;
+    return { items, hasMore, nextOffset: hasMore ? safeOffset + safeLimit : null };
+  }
+
+  createGuestbookMessage(input: GuestbookMessageInput): GuestbookMessageRecord {
+    const now = nowISO();
+    const message = this.guestbookMessageFromInput({
+      ...input,
+      id: uuidv4(),
+      status: input.status ?? "pending",
+      createdAt: now,
+      updatedAt: now
+    });
+    this.db.run(
+      "INSERT INTO guestbook_messages (id, nickname, email, content, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      guestbookMessageParams(message)
+    );
+    this.persist();
+    return message;
+  }
+
+  updateGuestbookMessageStatus(id: string, status: GuestbookStatus): GuestbookMessageRecord {
+    const existing = this.requireGuestbookMessage(id);
+    const updated = { ...existing, status: requireGuestbookStatus(status), updatedAt: nowISO() };
+    this.db.run("UPDATE guestbook_messages SET status = ?, updatedAt = ? WHERE id = ?", [updated.status, updated.updatedAt, id]);
+    this.persist();
+    return updated;
+  }
+
+  deleteGuestbookMessage(id: string): void {
+    this.db.run("DELETE FROM guestbook_messages WHERE id = ?", [id]);
+    this.persist();
+  }
+
   getAdminSnapshot() {
     return {
       shows: this.listShows().sort(byDateDesc),
@@ -653,6 +703,7 @@ export class DataStore {
     this.db.run("DELETE FROM brand_venues");
     this.db.run("DELETE FROM venue_performers");
     this.db.run("DELETE FROM calendar_events");
+    this.db.run("DELETE FROM guestbook_messages");
     this.db.run("DELETE FROM shows");
     this.db.run("DELETE FROM performers");
     this.db.run("DELETE FROM brands");
@@ -763,6 +814,15 @@ export class DataStore {
         notes TEXT NOT NULL DEFAULT '',
         source TEXT NOT NULL,
         createdShowID TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS guestbook_messages (
+        id TEXT PRIMARY KEY,
+        nickname TEXT NOT NULL,
+        email TEXT,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       );
@@ -884,6 +944,18 @@ export class DataStore {
     };
   }
 
+  private guestbookMessageFromRow(row: Row): GuestbookMessageRecord {
+    return {
+      id: String(row.id),
+      nickname: String(row.nickname),
+      email: nullable(row.email),
+      content: String(row.content),
+      status: String(row.status) as GuestbookStatus,
+      createdAt: String(row.createdAt),
+      updatedAt: String(row.updatedAt)
+    };
+  }
+
   private toPublicShow(show: ShowRecord, includeNotes: boolean): PublicShowSummary {
     const brand = show.brandID ? this.listBrands().find((item) => item.id === show.brandID) ?? null : null;
     const venue = show.venueID ? this.listVenues().find((item) => item.id === show.venueID) ?? null : null;
@@ -937,6 +1009,21 @@ export class DataStore {
     return event;
   }
 
+  private toPublicGuestbookMessage(message: GuestbookMessageRecord) {
+    return {
+      id: message.id,
+      nickname: message.nickname,
+      content: message.content,
+      createdAt: message.createdAt
+    };
+  }
+
+  private requireGuestbookMessage(id: string): GuestbookMessageRecord {
+    const message = this.listGuestbookMessages().find((item) => item.id === id);
+    if (!message) throw new Error("留言不存在。");
+    return message;
+  }
+
   private findOrCreateImportBrand(displayName: string, cityName: string | null, result: CalendarImportResult): BrandRecord {
     const normalizedKey = normalizeValue(displayName);
     const existing = this.listBrands().find((brand) => brand.normalizedKey === normalizedKey);
@@ -978,6 +1065,26 @@ export class DataStore {
       notes: input.notes ?? "",
       source: input.source ?? "manual",
       createdShowID: input.createdShowID,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt
+    };
+  }
+
+  private guestbookMessageFromInput(input: GuestbookMessageInput & {
+    id: string;
+    status: GuestbookStatus;
+    createdAt: string;
+    updatedAt: string;
+  }): GuestbookMessageRecord {
+    const nickname = requiredName(input.nickname ?? "", "昵称");
+    const content = String(input.content ?? "").trim();
+    if (!content) throw new Error("留言内容不能为空。");
+    return {
+      id: input.id,
+      nickname,
+      email: asNullableString(input.email),
+      content,
+      status: requireGuestbookStatus(input.status),
       createdAt: input.createdAt,
       updatedAt: input.updatedAt
     };
@@ -1058,6 +1165,18 @@ function calendarEventParams(event: CalendarEventRecord): RowValue[] {
   ];
 }
 
+function guestbookMessageParams(message: GuestbookMessageRecord): RowValue[] {
+  return [
+    message.id,
+    message.nickname,
+    message.email,
+    message.content,
+    message.status,
+    message.createdAt,
+    message.updatedAt
+  ];
+}
+
 function localDateKey(date: Date): string {
   const parts = calendarDateFormatter.formatToParts(date);
   const year = parts.find((part) => part.type === "year")?.value;
@@ -1122,6 +1241,11 @@ function requireTime(value: string | undefined): string {
   const [hour, minute] = time.split(":").map(Number);
   if (hour > 23 || minute > 59) throw new Error("日历事件开始时间必须是有效的 HH:mm。");
   return time;
+}
+
+function requireGuestbookStatus(value: string | undefined): GuestbookStatus {
+  if (value === "pending" || value === "approved" || value === "hidden") return value;
+  throw new Error("留言状态不正确。");
 }
 
 const formatByLabel = new Map(Object.entries(formatLabels).map(([key, label]) => [label, key as ShowFormat]));

@@ -220,6 +220,34 @@ export interface CalendarImportResult {
   errors: { row: number; field: string; message: string }[];
 }
 
+export const guestbookStatuses = ["pending", "approved", "hidden"] as const;
+export type GuestbookStatus = (typeof guestbookStatuses)[number];
+
+export interface GuestbookMessageRecord {
+  id: string;
+  nickname: string;
+  email: string | null;
+  content: string;
+  status: GuestbookStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GuestbookMessageInput {
+  nickname?: string;
+  email?: string | null;
+  content?: string;
+  status?: GuestbookStatus;
+}
+
+export type PublicGuestbookMessage = Pick<GuestbookMessageRecord, "id" | "nickname" | "content" | "createdAt">;
+
+export interface GuestbookPageResult {
+  items: PublicGuestbookMessage[];
+  hasMore: boolean;
+  nextOffset: number | null;
+}
+
 export function normalizeValue(rawValue: string): string {
   return rawValue.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 }

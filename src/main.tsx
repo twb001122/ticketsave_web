@@ -5,7 +5,9 @@ import { CalendarPage } from "./calendar-page";
 import { ComingSoonPage } from "./coming-soon";
 import { PerformerPicker } from "./performer-picker";
 import { HomePage } from "./home-page";
+import { GuestbookPage } from "./guestbook-page";
 import { CalendarAdmin } from "./admin-calendar";
+import { GuestbookAdmin } from "./admin-guestbook";
 import {
   formatLabels,
   roleLabels,
@@ -67,7 +69,7 @@ export function App() {
   if (route.path === "/shows/:id") return <ShowDetail id={route.params.id} />;
   if (route.path === "/tickets") return <ArchiveWall />;
   if (route.path === "/calendar") return <CalendarPage onNavigate={navigate} />;
-  if (route.path === "/guestbook") return <ComingSoonPage title="留言板" onNavigate={navigate} />;
+  if (route.path === "/guestbook") return <GuestbookPage onNavigate={navigate} />;
   if (route.path === "/diary") return <ComingSoonPage title="喜剧日记" onNavigate={navigate} />;
   if (route.path === "/friends") return <ComingSoonPage title="马达和他的朋友们" onNavigate={navigate} />;
   return <HomePage onNavigate={navigate} />;
@@ -233,7 +235,7 @@ function AdminApp() {
   const [checking, setChecking] = useState(true);
   const [password, setPassword] = useState("");
   const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
-  const [tab, setTab] = useState<"shows" | "entities" | "calendar" | "backup">("shows");
+  const [tab, setTab] = useState<"shows" | "entities" | "calendar" | "guestbook" | "backup">("shows");
 
   useEffect(() => {
     fetch("/api/admin/me")
@@ -285,11 +287,13 @@ function AdminApp() {
         <button className={tab === "shows" ? "active" : ""} onClick={() => setTab("shows")}>演出</button>
         <button className={tab === "entities" ? "active" : ""} onClick={() => setTab("entities")}>实体</button>
         <button className={tab === "calendar" ? "active" : ""} onClick={() => setTab("calendar")}>日历</button>
+        <button className={tab === "guestbook" ? "active" : ""} onClick={() => setTab("guestbook")}>留言</button>
         <button className={tab === "backup" ? "active" : ""} onClick={() => setTab("backup")}>备份</button>
       </nav>
       {tab === "shows" ? <ShowAdmin snapshot={snapshot} onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
       {tab === "entities" ? <EntityAdmin snapshot={snapshot} onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
       {tab === "calendar" ? <CalendarAdmin brands={snapshot.brands} venues={snapshot.venues} onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
+      {tab === "guestbook" ? <GuestbookAdmin /> : null}
       {tab === "backup" ? <BackupAdmin onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
     </main>
   );

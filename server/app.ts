@@ -5,6 +5,7 @@ import session from "express-session";
 import multer from "multer";
 import { exportBackupZip, importBackupZip } from "./backup.js";
 import type { DataStore } from "./db.js";
+import type { GuestbookStatus } from "../shared/domain.js";
 
 export interface ServerAppOptions {
   store: DataStore;
@@ -79,6 +80,22 @@ export async function createServerApp(options: ServerAppOptions) {
   app.get("/api/public/calendar/upcoming", (req, res) => {
     const days = Number(req.query.days ?? 7);
     res.json({ items: options.store.listUpcomingPublicCalendarEvents(days) });
+  });
+
+  app.get("/api/public/guestbook", (req, res) => {
+    res.json(options.store.listPublicGuestbookMessages({
+      limit: Number(req.query.limit ?? 10),
+      offset: Number(req.query.offset ?? 0)
+    }));
+  });
+
+  app.post("/api/public/guestbook", (req, res, next) => {
+    try {
+      options.store.createGuestbookMessage(parseBody(req.body));
+      res.status(201).json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
   });
 
   app.get("/covers/:fileName", (req, res) => {
@@ -201,6 +218,27 @@ export async function createServerApp(options: ServerAppOptions) {
   app.post("/api/admin/calendar/:id/create-show", requireAdmin, (req, res, next) => {
     try {
       res.status(201).json(options.store.createShowFromCalendarEvent(String(req.params.id)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/admin/guestbook", requireAdmin, (_req, res) => {
+    res.json({ items: options.store.listGuestbookMessages() });
+  });
+
+  app.put("/api/admin/guestbook/:id", requireAdmin, (req, res, next) => {
+    try {
+      res.json(options.store.updateGuestbookMessageStatus(String(req.params.id), String(req.body?.status) as GuestbookStatus));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/admin/guestbook/:id", requireAdmin, (req, res, next) => {
+    try {
+      options.store.deleteGuestbookMessage(String(req.params.id));
+      res.json({ ok: true });
     } catch (error) {
       next(error);
     }
