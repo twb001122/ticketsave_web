@@ -248,6 +248,57 @@ export interface GuestbookPageResult {
   nextOffset: number | null;
 }
 
+export const diaryPostStatuses = ["draft", "published"] as const;
+export type DiaryPostStatus = (typeof diaryPostStatuses)[number];
+
+export interface DiaryPostRecord {
+  id: string;
+  title: string;
+  excerpt: string;
+  content: string;
+  status: DiaryPostStatus;
+  likeCount: number;
+  publishedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DiaryPostInput {
+  title?: string;
+  excerpt?: string;
+  content?: string;
+  status?: DiaryPostStatus;
+  publishedAt?: string | null;
+}
+
+export interface DiaryCommentRecord {
+  id: string;
+  postID: string;
+  nickname: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface DiaryCommentInput {
+  nickname?: string;
+  content?: string;
+}
+
+export type PublicDiaryComment = DiaryCommentRecord;
+
+export type PublicDiaryPostSummary = Pick<DiaryPostRecord, "id" | "title" | "excerpt" | "likeCount" | "publishedAt">;
+
+export interface PublicDiaryPostDetail extends PublicDiaryPostSummary {
+  content: string;
+  comments: PublicDiaryComment[];
+}
+
+export interface DiaryPageResult {
+  items: PublicDiaryPostSummary[];
+  hasMore: boolean;
+  nextOffset: number | null;
+}
+
 export function normalizeValue(rawValue: string): string {
   return rawValue.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 }

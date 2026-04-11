@@ -5,7 +5,7 @@ import session from "express-session";
 import multer from "multer";
 import { exportBackupZip, importBackupZip } from "./backup.js";
 import type { DataStore } from "./db.js";
-import type { GuestbookStatus } from "../shared/domain.js";
+import type { DiaryPostStatus, GuestbookStatus } from "../shared/domain.js";
 
 export interface ServerAppOptions {
   store: DataStore;
@@ -93,6 +93,35 @@ export async function createServerApp(options: ServerAppOptions) {
     try {
       options.store.createGuestbookMessage(parseBody(req.body));
       res.status(201).json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/public/diary", (req, res) => {
+    res.json(options.store.listPublicDiaryPosts({
+      limit: Number(req.query.limit ?? 6),
+      offset: Number(req.query.offset ?? 0)
+    }));
+  });
+
+  app.get("/api/public/diary/:id", (req, res) => {
+    const post = options.store.getPublicDiaryPost(String(req.params.id));
+    if (!post) return res.status(404).json({ error: "日记不存在。" });
+    res.json(post);
+  });
+
+  app.post("/api/public/diary/:id/like", (req, res, next) => {
+    try {
+      res.json(options.store.likeDiaryPost(String(req.params.id)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/public/diary/:id/comments", (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createDiaryComment(String(req.params.id), parseBody(req.body)));
     } catch (error) {
       next(error);
     }
@@ -244,6 +273,35 @@ export async function createServerApp(options: ServerAppOptions) {
     }
   });
 
+  app.get("/api/admin/diary", requireAdmin, (_req, res) => {
+    res.json({ items: options.store.listDiaryPosts() });
+  });
+
+  app.post("/api/admin/diary", requireAdmin, (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createDiaryPost(parseDiaryPostBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/admin/diary/:id", requireAdmin, (req, res, next) => {
+    try {
+      res.json(options.store.updateDiaryPost(String(req.params.id), parseDiaryPostBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/admin/diary/:id", requireAdmin, (req, res, next) => {
+    try {
+      options.store.deleteDiaryPost(String(req.params.id));
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/admin/backup/import", requireAdmin, upload.single("archive"), async (req, res, next) => {
     try {
       if (!req.file) return res.status(400).json({ error: "请选择 zip 备份文件。" });
@@ -346,6 +404,16 @@ function parseBody(body: Record<string, unknown>): any {
     if (parsed[key] === "") parsed[key] = null;
   }
   return parsed;
+}
+
+function parseDiaryPostBody(body: Record<string, unknown>) {
+  return {
+    title: typeof body.title === "string" ? body.title : undefined,
+    excerpt: typeof body.excerpt === "string" ? body.excerpt : undefined,
+    content: typeof body.content === "string" ? body.content : undefined,
+    status: typeof body.status === "string" ? body.status as DiaryPostStatus : undefined,
+    publishedAt: typeof body.publishedAt === "string" ? body.publishedAt : null
+  };
 }
 
 function bodyOrNull(value: unknown): string | null {

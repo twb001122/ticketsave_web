@@ -20,6 +20,13 @@ import {
   type GuestbookMessageRecord,
   type GuestbookPageResult,
   type GuestbookStatus,
+  type DiaryCommentInput,
+  type DiaryCommentRecord,
+  type DiaryPageResult,
+  type DiaryPostInput,
+  type DiaryPostRecord,
+  type DiaryPostStatus,
+  type PublicDiaryPostDetail,
   type ArchiveSummary,
   type BackupPayload,
   type BackupShowRecord,
@@ -621,6 +628,105 @@ export class DataStore {
     this.persist();
   }
 
+  listDiaryPosts(): DiaryPostRecord[] {
+    return this.queryAll("SELECT * FROM diary_posts ORDER BY COALESCE(publishedAt, createdAt) DESC, updatedAt DESC").map((row) => this.diaryPostFromRow(row));
+  }
+
+  listPublicDiaryPosts({ limit = 6, offset = 0 }: { limit?: number; offset?: number } = {}): DiaryPageResult {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    const safeOffset = Math.max(0, Math.floor(offset));
+    const rows = this.queryAll(
+      "SELECT * FROM diary_posts WHERE status = 'published' ORDER BY publishedAt DESC, createdAt DESC LIMIT ? OFFSET ?",
+      [safeLimit + 1, safeOffset]
+    ).map((row) => this.diaryPostFromRow(row));
+    const items = rows.slice(0, safeLimit).map((post) => this.toPublicDiaryPostSummary(post));
+    const hasMore = rows.length > safeLimit;
+    return { items, hasMore, nextOffset: hasMore ? safeOffset + safeLimit : null };
+  }
+
+  getPublicDiaryPost(id: string): PublicDiaryPostDetail | null {
+    const post = this.getDiaryPost(id);
+    if (!post || post.status !== "published") return null;
+    return this.toPublicDiaryPostDetail(post);
+  }
+
+  getDiaryPost(id: string): DiaryPostRecord | null {
+    const row = this.queryOne("SELECT * FROM diary_posts WHERE id = ?", [id]);
+    return row ? this.diaryPostFromRow(row) : null;
+  }
+
+  createDiaryPost(input: DiaryPostInput): DiaryPostRecord {
+    const now = nowISO();
+    const post = this.diaryPostFromInput({
+      ...input,
+      id: uuidv4(),
+      likeCount: 0,
+      createdAt: now,
+      updatedAt: now
+    });
+    this.db.run(
+      "INSERT INTO diary_posts (id, title, excerpt, content, status, likeCount, publishedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      diaryPostParams(post)
+    );
+    this.persist();
+    return post;
+  }
+
+  updateDiaryPost(id: string, input: DiaryPostInput): DiaryPostRecord {
+    const existing = this.requireDiaryPost(id);
+    const updated = this.diaryPostFromInput({
+      ...existing,
+      ...input,
+      id,
+      likeCount: existing.likeCount,
+      createdAt: existing.createdAt,
+      updatedAt: nowISO()
+    });
+    this.db.run(
+      `UPDATE diary_posts SET
+       title = ?, excerpt = ?, content = ?, status = ?, likeCount = ?, publishedAt = ?, updatedAt = ?
+       WHERE id = ?`,
+      [updated.title, updated.excerpt, updated.content, updated.status, updated.likeCount, updated.publishedAt, updated.updatedAt, id]
+    );
+    this.persist();
+    return updated;
+  }
+
+  deleteDiaryPost(id: string): void {
+    this.db.run("DELETE FROM diary_comments WHERE postID = ?", [id]);
+    this.db.run("DELETE FROM diary_posts WHERE id = ?", [id]);
+    this.persist();
+  }
+
+  likeDiaryPost(id: string): PublicDiaryPostDetail {
+    const existing = this.requirePublicDiaryPost(id);
+    const updated = { ...existing, likeCount: existing.likeCount + 1, updatedAt: nowISO() };
+    this.db.run("UPDATE diary_posts SET likeCount = ?, updatedAt = ? WHERE id = ?", [updated.likeCount, updated.updatedAt, id]);
+    this.persist();
+    return this.toPublicDiaryPostDetail(updated);
+  }
+
+  listDiaryComments(postID: string): DiaryCommentRecord[] {
+    return this.queryAll("SELECT * FROM diary_comments WHERE postID = ? ORDER BY createdAt ASC", [postID]).map((row) => this.diaryCommentFromRow(row));
+  }
+
+  createDiaryComment(postID: string, input: DiaryCommentInput): DiaryCommentRecord {
+    this.requirePublicDiaryPost(postID);
+    const now = nowISO();
+    const comment = this.diaryCommentFromInput({
+      ...input,
+      id: uuidv4(),
+      postID,
+      createdAt: now
+    });
+    this.db.run(
+      "INSERT INTO diary_comments (id, postID, nickname, content, createdAt) VALUES (?, ?, ?, ?, ?)",
+      diaryCommentParams(comment)
+    );
+    this.persist();
+    return comment;
+  }
+
   getAdminSnapshot() {
     return {
       shows: this.listShows().sort(byDateDesc),
@@ -704,6 +810,8 @@ export class DataStore {
     this.db.run("DELETE FROM venue_performers");
     this.db.run("DELETE FROM calendar_events");
     this.db.run("DELETE FROM guestbook_messages");
+    this.db.run("DELETE FROM diary_comments");
+    this.db.run("DELETE FROM diary_posts");
     this.db.run("DELETE FROM shows");
     this.db.run("DELETE FROM performers");
     this.db.run("DELETE FROM brands");
@@ -825,6 +933,24 @@ export class DataStore {
         status TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS diary_posts (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        excerpt TEXT NOT NULL,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL,
+        likeCount INTEGER NOT NULL DEFAULT 0,
+        publishedAt TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS diary_comments (
+        id TEXT PRIMARY KEY,
+        postID TEXT NOT NULL,
+        nickname TEXT NOT NULL,
+        content TEXT NOT NULL,
+        createdAt TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS show_performers (showID TEXT NOT NULL, performerID TEXT NOT NULL, sortOrder INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS performer_brands (performerID TEXT NOT NULL, brandID TEXT NOT NULL);
@@ -956,6 +1082,30 @@ export class DataStore {
     };
   }
 
+  private diaryPostFromRow(row: Row): DiaryPostRecord {
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      excerpt: String(row.excerpt ?? ""),
+      content: String(row.content ?? ""),
+      status: String(row.status) as DiaryPostStatus,
+      likeCount: Number(row.likeCount ?? 0),
+      publishedAt: nullable(row.publishedAt),
+      createdAt: String(row.createdAt),
+      updatedAt: String(row.updatedAt)
+    };
+  }
+
+  private diaryCommentFromRow(row: Row): DiaryCommentRecord {
+    return {
+      id: String(row.id),
+      postID: String(row.postID),
+      nickname: String(row.nickname),
+      content: String(row.content),
+      createdAt: String(row.createdAt)
+    };
+  }
+
   private toPublicShow(show: ShowRecord, includeNotes: boolean): PublicShowSummary {
     const brand = show.brandID ? this.listBrands().find((item) => item.id === show.brandID) ?? null : null;
     const venue = show.venueID ? this.listVenues().find((item) => item.id === show.venueID) ?? null : null;
@@ -1018,10 +1168,40 @@ export class DataStore {
     };
   }
 
+  private toPublicDiaryPostSummary(post: DiaryPostRecord) {
+    return {
+      id: post.id,
+      title: post.title,
+      excerpt: post.excerpt,
+      likeCount: post.likeCount,
+      publishedAt: post.publishedAt
+    };
+  }
+
+  private toPublicDiaryPostDetail(post: DiaryPostRecord): PublicDiaryPostDetail {
+    return {
+      ...this.toPublicDiaryPostSummary(post),
+      content: post.content,
+      comments: this.listDiaryComments(post.id)
+    };
+  }
+
   private requireGuestbookMessage(id: string): GuestbookMessageRecord {
     const message = this.listGuestbookMessages().find((item) => item.id === id);
     if (!message) throw new Error("留言不存在。");
     return message;
+  }
+
+  private requireDiaryPost(id: string): DiaryPostRecord {
+    const post = this.getDiaryPost(id);
+    if (!post) throw new Error("日记不存在。");
+    return post;
+  }
+
+  private requirePublicDiaryPost(id: string): DiaryPostRecord {
+    const post = this.requireDiaryPost(id);
+    if (post.status !== "published") throw new Error("日记不存在。");
+    return post;
   }
 
   private findOrCreateImportBrand(displayName: string, cityName: string | null, result: CalendarImportResult): BrandRecord {
@@ -1087,6 +1267,47 @@ export class DataStore {
       status: requireGuestbookStatus(input.status),
       createdAt: input.createdAt,
       updatedAt: input.updatedAt
+    };
+  }
+
+  private diaryPostFromInput(input: DiaryPostInput & {
+    id: string;
+    likeCount: number;
+    createdAt: string;
+    updatedAt: string;
+  }): DiaryPostRecord {
+    const title = requiredName(input.title ?? "", "日记标题");
+    const content = String(input.content ?? "").trim();
+    const status = requireDiaryPostStatus(input.status ?? "draft");
+    if (!content) throw new Error("日记正文不能为空。");
+    const publishedAt = status === "published" ? asNullableString(input.publishedAt) ?? input.createdAt : asNullableString(input.publishedAt);
+    return {
+      id: input.id,
+      title,
+      excerpt: String(input.excerpt ?? "").trim(),
+      content,
+      status,
+      likeCount: input.likeCount,
+      publishedAt,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt
+    };
+  }
+
+  private diaryCommentFromInput(input: DiaryCommentInput & {
+    id: string;
+    postID: string;
+    createdAt: string;
+  }): DiaryCommentRecord {
+    const nickname = requiredName(input.nickname ?? "", "昵称");
+    const content = String(input.content ?? "").trim();
+    if (!content) throw new Error("评论内容不能为空。");
+    return {
+      id: input.id,
+      postID: input.postID,
+      nickname,
+      content,
+      createdAt: input.createdAt
     };
   }
 
@@ -1177,6 +1398,30 @@ function guestbookMessageParams(message: GuestbookMessageRecord): RowValue[] {
   ];
 }
 
+function diaryPostParams(post: DiaryPostRecord): RowValue[] {
+  return [
+    post.id,
+    post.title,
+    post.excerpt,
+    post.content,
+    post.status,
+    post.likeCount,
+    post.publishedAt,
+    post.createdAt,
+    post.updatedAt
+  ];
+}
+
+function diaryCommentParams(comment: DiaryCommentRecord): RowValue[] {
+  return [
+    comment.id,
+    comment.postID,
+    comment.nickname,
+    comment.content,
+    comment.createdAt
+  ];
+}
+
 function localDateKey(date: Date): string {
   const parts = calendarDateFormatter.formatToParts(date);
   const year = parts.find((part) => part.type === "year")?.value;
@@ -1246,6 +1491,11 @@ function requireTime(value: string | undefined): string {
 function requireGuestbookStatus(value: string | undefined): GuestbookStatus {
   if (value === "pending" || value === "approved" || value === "hidden") return value;
   throw new Error("留言状态不正确。");
+}
+
+function requireDiaryPostStatus(value: string | undefined): DiaryPostStatus {
+  if (value === "draft" || value === "published") return value;
+  throw new Error("日记状态不正确。");
 }
 
 const formatByLabel = new Map(Object.entries(formatLabels).map(([key, label]) => [label, key as ShowFormat]));
