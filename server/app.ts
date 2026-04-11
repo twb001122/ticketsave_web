@@ -5,6 +5,7 @@ import session from "express-session";
 import multer from "multer";
 import { exportBackupZip, importBackupZip } from "./backup.js";
 import type { DataStore } from "./db.js";
+import type { DiaryPostStatus, GuestbookStatus } from "../shared/domain.js";
 
 export interface ServerAppOptions {
   store: DataStore;
@@ -15,6 +16,20 @@ export interface ServerAppOptions {
 
 const uploadLimitMB = Number(process.env.UPLOAD_LIMIT_MB ?? 256);
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: uploadLimitMB * 1024 * 1024 } });
+const calendarImportTemplate = [
+  {
+    date: "2026-04-18",
+    startTime: "20:00",
+    brand: "某某喜剧",
+    venue: "某某剧场",
+    city: "上海",
+    format: "单口",
+    myRole: "主持",
+    showType: "开放麦",
+    title: "周六开放麦",
+    notes: "可选备注"
+  }
+];
 
 export async function createServerApp(options: ServerAppOptions) {
   const app = express();
@@ -52,6 +67,74 @@ export async function createServerApp(options: ServerAppOptions) {
     const show = options.store.getPublicShow(req.params.id);
     if (!show) return res.status(404).json({ error: "演出不存在。" });
     res.json(show);
+  });
+
+  app.get("/api/public/calendar", (req, res) => {
+    res.json({
+      items: options.store.listPublicCalendarEvents({
+        month: typeof req.query.month === "string" ? req.query.month : undefined
+      })
+    });
+  });
+
+  app.get("/api/public/calendar/upcoming", (req, res) => {
+    const days = Number(req.query.days ?? 7);
+    res.json({ items: options.store.listUpcomingPublicCalendarEvents(days) });
+  });
+
+  app.get("/api/public/guestbook", (req, res) => {
+    res.json(options.store.listPublicGuestbookMessages({
+      limit: Number(req.query.limit ?? 10),
+      offset: Number(req.query.offset ?? 0)
+    }));
+  });
+
+  app.post("/api/public/guestbook", (req, res, next) => {
+    try {
+      options.store.createGuestbookMessage(parseBody(req.body));
+      res.status(201).json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/public/diary", (req, res) => {
+    res.json(options.store.listPublicDiaryPosts({
+      limit: Number(req.query.limit ?? 6),
+      offset: Number(req.query.offset ?? 0)
+    }));
+  });
+
+  app.get("/api/public/diary/:id", (req, res) => {
+    const post = options.store.getPublicDiaryPost(String(req.params.id));
+    if (!post) return res.status(404).json({ error: "日记不存在。" });
+    res.json(post);
+  });
+
+  app.post("/api/public/diary/:id/like", (req, res, next) => {
+    try {
+      res.json(options.store.likeDiaryPost(String(req.params.id)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/public/diary/:id/comments", (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createDiaryComment(String(req.params.id), parseBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/public/friends", (_req, res) => {
+    res.json({ items: options.store.listPublicFriends() });
+  });
+
+  app.get("/api/public/friends/:id", (req, res) => {
+    const friend = options.store.getPublicFriend(String(req.params.id));
+    if (!friend) return res.status(404).json({ error: "朋友资料不存在。" });
+    res.json(friend);
   });
 
   app.get("/covers/:fileName", (req, res) => {
@@ -129,6 +212,135 @@ export async function createServerApp(options: ServerAppOptions) {
     delete: (id) => options.store.deleteVenue(id)
   });
 
+  app.get("/api/admin/calendar", requireAdmin, (_req, res) => {
+    res.json({ items: options.store.listCalendarEvents() });
+  });
+
+  app.post("/api/admin/calendar", requireAdmin, (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createCalendarEvent(parseBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/admin/calendar/:id", requireAdmin, (req, res, next) => {
+    try {
+      res.json(options.store.updateCalendarEvent(String(req.params.id), parseBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/admin/calendar/:id", requireAdmin, (req, res, next) => {
+    try {
+      options.store.deleteCalendarEvent(String(req.params.id));
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/admin/calendar/import-template", requireAdmin, (_req, res) => {
+    res.json(calendarImportTemplate);
+  });
+
+  app.post("/api/admin/calendar/import", requireAdmin, (req, res, next) => {
+    try {
+      if (!Array.isArray(req.body)) return res.status(400).json({ error: "导入内容必须是 JSON 数组。" });
+      res.json(options.store.importCalendarRows(req.body));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.post("/api/admin/calendar/:id/create-show", requireAdmin, (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createShowFromCalendarEvent(String(req.params.id)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/admin/guestbook", requireAdmin, (_req, res) => {
+    res.json({ items: options.store.listGuestbookMessages() });
+  });
+
+  app.put("/api/admin/guestbook/:id", requireAdmin, (req, res, next) => {
+    try {
+      res.json(options.store.updateGuestbookMessageStatus(String(req.params.id), String(req.body?.status) as GuestbookStatus));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/admin/guestbook/:id", requireAdmin, (req, res, next) => {
+    try {
+      options.store.deleteGuestbookMessage(String(req.params.id));
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/admin/diary", requireAdmin, (_req, res) => {
+    res.json({ items: options.store.listDiaryPosts() });
+  });
+
+  app.post("/api/admin/diary", requireAdmin, (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createDiaryPost(parseDiaryPostBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/admin/diary/:id", requireAdmin, (req, res, next) => {
+    try {
+      res.json(options.store.updateDiaryPost(String(req.params.id), parseDiaryPostBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/admin/diary/:id", requireAdmin, (req, res, next) => {
+    try {
+      options.store.deleteDiaryPost(String(req.params.id));
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.get("/api/admin/friends", requireAdmin, (_req, res) => {
+    res.json({ items: options.store.listFriends() });
+  });
+
+  app.post("/api/admin/friends", requireAdmin, (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createFriend(parseFriendBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/admin/friends/:id", requireAdmin, (req, res, next) => {
+    try {
+      res.json(options.store.updateFriend(String(req.params.id), parseFriendBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/admin/friends/:id", requireAdmin, (req, res, next) => {
+    try {
+      options.store.deleteFriend(String(req.params.id));
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/admin/backup/import", requireAdmin, upload.single("archive"), async (req, res, next) => {
     try {
       if (!req.file) return res.status(400).json({ error: "请选择 zip 备份文件。" });
@@ -153,9 +365,12 @@ export async function createServerApp(options: ServerAppOptions) {
   });
 
   if (options.staticDir) {
+    app.get(/^(?!\/api|\/covers)(?!.*\.[^/]+$).*/, (_req, res) => {
+      res.sendFile("index.html", { root: options.staticDir });
+    });
     app.use(express.static(options.staticDir));
     app.get(/^(?!\/api|\/covers).*/, (_req, res) => {
-      res.sendFile(path.join(options.staticDir!, "index.html"));
+      res.sendFile("index.html", { root: options.staticDir });
     });
   }
 
@@ -228,6 +443,26 @@ function parseBody(body: Record<string, unknown>): any {
     if (parsed[key] === "") parsed[key] = null;
   }
   return parsed;
+}
+
+function parseDiaryPostBody(body: Record<string, unknown>) {
+  return {
+    title: typeof body.title === "string" ? body.title : undefined,
+    excerpt: typeof body.excerpt === "string" ? body.excerpt : undefined,
+    content: typeof body.content === "string" ? body.content : undefined,
+    status: typeof body.status === "string" ? body.status as DiaryPostStatus : undefined,
+    publishedAt: typeof body.publishedAt === "string" ? body.publishedAt : null
+  };
+}
+
+function parseFriendBody(body: Record<string, unknown>) {
+  return {
+    performerID: typeof body.performerID === "string" ? body.performerID : undefined,
+    bio: typeof body.bio === "string" ? body.bio : undefined,
+    quote: typeof body.quote === "string" ? body.quote : undefined,
+    photoUrl: typeof body.photoUrl === "string" ? body.photoUrl : null,
+    galleryUrls: Array.isArray(body.galleryUrls) ? body.galleryUrls.map(String) : []
+  };
 }
 
 function bodyOrNull(value: unknown): string | null {

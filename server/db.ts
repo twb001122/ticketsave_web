@@ -4,15 +4,40 @@ import initSqlJs, { type Database } from "sql.js";
 import { v4 as uuidv4 } from "uuid";
 import {
   asNullableString,
+  formatLabels,
+  roleLabels,
+  typeLabels,
   nowISO,
   normalizeValue,
   storedTitle,
   venueLookupKey,
+  type CalendarEventInput,
+  type CalendarImportResult,
+  type CalendarImportRow,
+  type CalendarEventRecord,
+  type CalendarSource,
+  type GuestbookMessageInput,
+  type GuestbookMessageRecord,
+  type GuestbookPageResult,
+  type GuestbookStatus,
+  type DiaryCommentInput,
+  type DiaryCommentRecord,
+  type DiaryPageResult,
+  type DiaryPostInput,
+  type DiaryPostRecord,
+  type DiaryPostStatus,
+  type FriendInput,
+  type FriendRecord,
+  type FriendSharedShow,
+  type PublicDiaryPostDetail,
+  type PublicFriendDetail,
+  type PublicFriendSummary,
   type ArchiveSummary,
   type BackupPayload,
   type BackupShowRecord,
   type BrandRecord,
   type PerformerRecord,
+  type PublicCalendarEventSummary,
   type PublicShowSummary,
   type ShowFormat,
   type ShowRecord,
@@ -24,6 +49,14 @@ import {
 
 type RowValue = string | number | Uint8Array | null;
 type Row = Record<string, RowValue>;
+
+const calendarTimeZone = "Asia/Shanghai";
+const calendarDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: calendarTimeZone,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit"
+});
 
 export interface DataStoreOptions {
   inMemory?: boolean;
@@ -224,6 +257,7 @@ export class DataStore {
   deleteShow(id: string): void {
     this.db.run("DELETE FROM shows WHERE id = ?", [id]);
     this.db.run("DELETE FROM show_performers WHERE showID = ?", [id]);
+    this.db.run("UPDATE calendar_events SET createdShowID = NULL, updatedAt = ? WHERE createdShowID = ?", [nowISO(), id]);
     this.persist();
   }
 
@@ -341,6 +375,9 @@ export class DataStore {
     if (this.queryOne("SELECT id FROM shows WHERE brandID = ? LIMIT 1", [id])) {
       throw new Error("厂牌仍被演出引用，暂时不能删除。");
     }
+    if (this.queryOne("SELECT id FROM calendar_events WHERE brandID = ? LIMIT 1", [id])) {
+      throw new Error("厂牌仍被日历事件引用，暂时不能删除。");
+    }
     this.db.run("DELETE FROM brands WHERE id = ?", [id]);
     this.db.run("DELETE FROM performer_brands WHERE brandID = ?", [id]);
     this.db.run("DELETE FROM brand_performers WHERE brandID = ?", [id]);
@@ -406,9 +443,350 @@ export class DataStore {
     if (this.queryOne("SELECT id FROM shows WHERE venueID = ? LIMIT 1", [id])) {
       throw new Error("场地仍被演出引用，暂时不能删除。");
     }
+    if (this.queryOne("SELECT id FROM calendar_events WHERE venueID = ? LIMIT 1", [id])) {
+      throw new Error("场地仍被日历事件引用，暂时不能删除。");
+    }
     this.db.run("DELETE FROM venues WHERE id = ?", [id]);
     this.db.run("DELETE FROM brand_venues WHERE venueID = ?", [id]);
     this.db.run("DELETE FROM venue_performers WHERE venueID = ?", [id]);
+    this.persist();
+  }
+
+  listCalendarEvents(filters: { month?: string } = {}): CalendarEventRecord[] {
+    const events = this.queryAll("SELECT * FROM calendar_events ORDER BY eventDate ASC, startTime ASC, updatedAt DESC").map((row) => this.calendarEventFromRow(row));
+    return filters.month ? events.filter((event) => event.eventDate.startsWith(`${filters.month}-`)) : events;
+  }
+
+  importCalendarRows(rows: Partial<CalendarImportRow>[]): CalendarImportResult {
+    const result: CalendarImportResult = {
+      importedCount: 0,
+      skippedCount: 0,
+      createdBrands: [],
+      createdVenues: [],
+      errors: []
+    };
+
+    rows.forEach((row, index) => {
+      const rowNumber = index + 1;
+      const parsed = parseCalendarRow(row, rowNumber);
+      if (parsed.errors.length > 0) {
+        result.skippedCount += 1;
+        result.errors.push(...parsed.errors);
+        return;
+      }
+
+      const brand = this.findOrCreateImportBrand(parsed.value.brand, parsed.value.city, result);
+      const venue = this.findOrCreateImportVenue(parsed.value.venue, parsed.value.city, result);
+      this.createCalendarEvent({
+        title: parsed.value.title,
+        eventDate: parsed.value.date,
+        startTime: parsed.value.startTime,
+        brandID: brand.id,
+        venueID: venue.id,
+        format: parsed.value.format,
+        myRole: parsed.value.myRole,
+        showType: parsed.value.showType,
+        notes: parsed.value.notes,
+        source: "import"
+      });
+      result.importedCount += 1;
+    });
+
+    return result;
+  }
+
+  listPublicCalendarEvents(filters: { month?: string } = {}): PublicCalendarEventSummary[] {
+    return this.listCalendarEvents(filters).map((event) => this.toPublicCalendarEvent(event));
+  }
+
+  listUpcomingPublicCalendarEvents(days: number): PublicCalendarEventSummary[] {
+    const now = new Date();
+    const startDate = localDateKey(now);
+    const endDate = addCalendarDays(startDate, Math.max(1, days));
+    return this.listCalendarEvents()
+      .filter((event) => event.eventDate >= startDate && event.eventDate <= endDate)
+      .map((event) => this.toPublicCalendarEvent(event));
+  }
+
+  createCalendarEvent(input: CalendarEventInput): CalendarEventRecord {
+    const now = nowISO();
+    const event = this.calendarEventFromInput({
+      ...input,
+      id: uuidv4(),
+      createdShowID: null,
+      createdAt: now,
+      updatedAt: now
+    });
+    this.db.run(
+      `INSERT INTO calendar_events
+       (id, title, eventDate, startTime, brandID, venueID, format, myRole, showType, notes, source, createdShowID, createdAt, updatedAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      calendarEventParams(event)
+    );
+    this.persist();
+    return event;
+  }
+
+  updateCalendarEvent(id: string, input: CalendarEventInput): CalendarEventRecord {
+    const existing = this.requireCalendarEvent(id);
+    const updated = this.calendarEventFromInput({
+      ...existing,
+      ...input,
+      id,
+      createdShowID: existing.createdShowID,
+      createdAt: existing.createdAt,
+      updatedAt: nowISO()
+    });
+    this.db.run(
+      `UPDATE calendar_events SET
+       title = ?, eventDate = ?, startTime = ?, brandID = ?, venueID = ?, format = ?, myRole = ?, showType = ?,
+       notes = ?, source = ?, createdShowID = ?, updatedAt = ?
+       WHERE id = ?`,
+      [
+        updated.title,
+        updated.eventDate,
+        updated.startTime,
+        updated.brandID,
+        updated.venueID,
+        updated.format,
+        updated.myRole,
+        updated.showType,
+        updated.notes,
+        updated.source,
+        updated.createdShowID,
+        updated.updatedAt,
+        id
+      ]
+    );
+    this.persist();
+    return updated;
+  }
+
+  createShowFromCalendarEvent(id: string): ShowRecord {
+    const event = this.requireCalendarEvent(id);
+    if (event.createdShowID) throw new Error("这条日历事件已经生成过票根。");
+    const show = this.createShow({
+      title: event.title,
+      date: `${event.eventDate}T${event.startTime}:00.000`,
+      venueID: event.venueID,
+      brandID: event.brandID,
+      format: event.format,
+      myRole: event.myRole,
+      showType: event.showType,
+      notes: event.notes,
+      notesPublic: false,
+      status: "published"
+    });
+    this.db.run("UPDATE calendar_events SET createdShowID = ?, updatedAt = ? WHERE id = ?", [show.id, nowISO(), id]);
+    this.persist();
+    return show;
+  }
+
+  deleteCalendarEvent(id: string): void {
+    this.db.run("DELETE FROM calendar_events WHERE id = ?", [id]);
+    this.persist();
+  }
+
+  listGuestbookMessages(): GuestbookMessageRecord[] {
+    return this.queryAll("SELECT * FROM guestbook_messages ORDER BY createdAt DESC").map((row) => this.guestbookMessageFromRow(row));
+  }
+
+  listPublicGuestbookMessages({ limit = 10, offset = 0 }: { limit?: number; offset?: number } = {}): GuestbookPageResult {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    const safeOffset = Math.max(0, Math.floor(offset));
+    const rows = this.queryAll(
+      "SELECT * FROM guestbook_messages WHERE status = 'approved' ORDER BY createdAt DESC LIMIT ? OFFSET ?",
+      [safeLimit + 1, safeOffset]
+    ).map((row) => this.guestbookMessageFromRow(row));
+    const items = rows.slice(0, safeLimit).map((message) => this.toPublicGuestbookMessage(message));
+    const hasMore = rows.length > safeLimit;
+    return { items, hasMore, nextOffset: hasMore ? safeOffset + safeLimit : null };
+  }
+
+  createGuestbookMessage(input: GuestbookMessageInput): GuestbookMessageRecord {
+    const now = nowISO();
+    const message = this.guestbookMessageFromInput({
+      ...input,
+      id: uuidv4(),
+      status: input.status ?? "pending",
+      createdAt: now,
+      updatedAt: now
+    });
+    this.db.run(
+      "INSERT INTO guestbook_messages (id, nickname, email, content, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      guestbookMessageParams(message)
+    );
+    this.persist();
+    return message;
+  }
+
+  updateGuestbookMessageStatus(id: string, status: GuestbookStatus): GuestbookMessageRecord {
+    const existing = this.requireGuestbookMessage(id);
+    const updated = { ...existing, status: requireGuestbookStatus(status), updatedAt: nowISO() };
+    this.db.run("UPDATE guestbook_messages SET status = ?, updatedAt = ? WHERE id = ?", [updated.status, updated.updatedAt, id]);
+    this.persist();
+    return updated;
+  }
+
+  deleteGuestbookMessage(id: string): void {
+    this.db.run("DELETE FROM guestbook_messages WHERE id = ?", [id]);
+    this.persist();
+  }
+
+  listDiaryPosts(): DiaryPostRecord[] {
+    return this.queryAll("SELECT * FROM diary_posts ORDER BY COALESCE(publishedAt, createdAt) DESC, updatedAt DESC").map((row) => this.diaryPostFromRow(row));
+  }
+
+  listPublicDiaryPosts({ limit = 6, offset = 0 }: { limit?: number; offset?: number } = {}): DiaryPageResult {
+    const safeLimit = Math.max(1, Math.min(50, Math.floor(limit)));
+    const safeOffset = Math.max(0, Math.floor(offset));
+    const rows = this.queryAll(
+      "SELECT * FROM diary_posts WHERE status = 'published' ORDER BY publishedAt DESC, createdAt DESC LIMIT ? OFFSET ?",
+      [safeLimit + 1, safeOffset]
+    ).map((row) => this.diaryPostFromRow(row));
+    const items = rows.slice(0, safeLimit).map((post) => this.toPublicDiaryPostSummary(post));
+    const hasMore = rows.length > safeLimit;
+    return { items, hasMore, nextOffset: hasMore ? safeOffset + safeLimit : null };
+  }
+
+  getPublicDiaryPost(id: string): PublicDiaryPostDetail | null {
+    const post = this.getDiaryPost(id);
+    if (!post || post.status !== "published") return null;
+    return this.toPublicDiaryPostDetail(post);
+  }
+
+  getDiaryPost(id: string): DiaryPostRecord | null {
+    const row = this.queryOne("SELECT * FROM diary_posts WHERE id = ?", [id]);
+    return row ? this.diaryPostFromRow(row) : null;
+  }
+
+  createDiaryPost(input: DiaryPostInput): DiaryPostRecord {
+    const now = nowISO();
+    const post = this.diaryPostFromInput({
+      ...input,
+      id: uuidv4(),
+      likeCount: 0,
+      createdAt: now,
+      updatedAt: now
+    });
+    this.db.run(
+      "INSERT INTO diary_posts (id, title, excerpt, content, status, likeCount, publishedAt, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      diaryPostParams(post)
+    );
+    this.persist();
+    return post;
+  }
+
+  updateDiaryPost(id: string, input: DiaryPostInput): DiaryPostRecord {
+    const existing = this.requireDiaryPost(id);
+    const updated = this.diaryPostFromInput({
+      ...existing,
+      ...input,
+      id,
+      likeCount: existing.likeCount,
+      createdAt: existing.createdAt,
+      updatedAt: nowISO()
+    });
+    this.db.run(
+      `UPDATE diary_posts SET
+       title = ?, excerpt = ?, content = ?, status = ?, likeCount = ?, publishedAt = ?, updatedAt = ?
+       WHERE id = ?`,
+      [updated.title, updated.excerpt, updated.content, updated.status, updated.likeCount, updated.publishedAt, updated.updatedAt, id]
+    );
+    this.persist();
+    return updated;
+  }
+
+  deleteDiaryPost(id: string): void {
+    this.db.run("DELETE FROM diary_comments WHERE postID = ?", [id]);
+    this.db.run("DELETE FROM diary_posts WHERE id = ?", [id]);
+    this.persist();
+  }
+
+  likeDiaryPost(id: string): PublicDiaryPostDetail {
+    const existing = this.requirePublicDiaryPost(id);
+    const updated = { ...existing, likeCount: existing.likeCount + 1, updatedAt: nowISO() };
+    this.db.run("UPDATE diary_posts SET likeCount = ?, updatedAt = ? WHERE id = ?", [updated.likeCount, updated.updatedAt, id]);
+    this.persist();
+    return this.toPublicDiaryPostDetail(updated);
+  }
+
+  listDiaryComments(postID: string): DiaryCommentRecord[] {
+    return this.queryAll("SELECT * FROM diary_comments WHERE postID = ? ORDER BY createdAt ASC", [postID]).map((row) => this.diaryCommentFromRow(row));
+  }
+
+  createDiaryComment(postID: string, input: DiaryCommentInput): DiaryCommentRecord {
+    this.requirePublicDiaryPost(postID);
+    const now = nowISO();
+    const comment = this.diaryCommentFromInput({
+      ...input,
+      id: uuidv4(),
+      postID,
+      createdAt: now
+    });
+    this.db.run(
+      "INSERT INTO diary_comments (id, postID, nickname, content, createdAt) VALUES (?, ?, ?, ?, ?)",
+      diaryCommentParams(comment)
+    );
+    this.persist();
+    return comment;
+  }
+
+  listFriends(): FriendRecord[] {
+    return this.queryAll("SELECT * FROM friends ORDER BY updatedAt DESC").map((row) => this.friendFromRow(row));
+  }
+
+  listPublicFriends(): PublicFriendSummary[] {
+    return this.listFriends().map((friend) => this.toPublicFriendSummary(friend));
+  }
+
+  getPublicFriend(id: string): PublicFriendDetail | null {
+    const friend = this.getFriend(id);
+    return friend ? this.toPublicFriendDetail(friend) : null;
+  }
+
+  getFriend(id: string): FriendRecord | null {
+    const row = this.queryOne("SELECT * FROM friends WHERE id = ?", [id]);
+    return row ? this.friendFromRow(row) : null;
+  }
+
+  createFriend(input: FriendInput): FriendRecord {
+    const now = nowISO();
+    const friend = this.friendFromInput({
+      ...input,
+      id: uuidv4(),
+      createdAt: now,
+      updatedAt: now
+    });
+    this.db.run(
+      "INSERT INTO friends (id, performerID, bio, quote, photoUrl, galleryUrls, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      friendParams(friend)
+    );
+    this.persist();
+    return friend;
+  }
+
+  updateFriend(id: string, input: FriendInput): FriendRecord {
+    const existing = this.requireFriend(id);
+    const updated = this.friendFromInput({
+      ...existing,
+      ...input,
+      id,
+      createdAt: existing.createdAt,
+      updatedAt: nowISO()
+    });
+    this.db.run(
+      `UPDATE friends SET
+       performerID = ?, bio = ?, quote = ?, photoUrl = ?, galleryUrls = ?, updatedAt = ?
+       WHERE id = ?`,
+      [updated.performerID, updated.bio, updated.quote, updated.photoUrl, JSON.stringify(updated.galleryUrls), updated.updatedAt, id]
+    );
+    this.persist();
+    return updated;
+  }
+
+  deleteFriend(id: string): void {
+    this.db.run("DELETE FROM friends WHERE id = ?", [id]);
     this.persist();
   }
 
@@ -493,6 +871,11 @@ export class DataStore {
     this.db.run("DELETE FROM brand_performers");
     this.db.run("DELETE FROM brand_venues");
     this.db.run("DELETE FROM venue_performers");
+    this.db.run("DELETE FROM calendar_events");
+    this.db.run("DELETE FROM guestbook_messages");
+    this.db.run("DELETE FROM diary_comments");
+    this.db.run("DELETE FROM diary_posts");
+    this.db.run("DELETE FROM friends");
     this.db.run("DELETE FROM shows");
     this.db.run("DELETE FROM performers");
     this.db.run("DELETE FROM brands");
@@ -587,6 +970,59 @@ export class DataStore {
         addressLine TEXT,
         district TEXT,
         cityName TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS calendar_events (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        eventDate TEXT NOT NULL,
+        startTime TEXT NOT NULL,
+        brandID TEXT NOT NULL,
+        venueID TEXT NOT NULL,
+        format TEXT NOT NULL,
+        myRole TEXT NOT NULL,
+        showType TEXT NOT NULL,
+        notes TEXT NOT NULL DEFAULT '',
+        source TEXT NOT NULL,
+        createdShowID TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS guestbook_messages (
+        id TEXT PRIMARY KEY,
+        nickname TEXT NOT NULL,
+        email TEXT,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS diary_posts (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        excerpt TEXT NOT NULL,
+        content TEXT NOT NULL,
+        status TEXT NOT NULL,
+        likeCount INTEGER NOT NULL DEFAULT 0,
+        publishedAt TEXT,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS diary_comments (
+        id TEXT PRIMARY KEY,
+        postID TEXT NOT NULL,
+        nickname TEXT NOT NULL,
+        content TEXT NOT NULL,
+        createdAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS friends (
+        id TEXT PRIMARY KEY,
+        performerID TEXT NOT NULL,
+        bio TEXT NOT NULL DEFAULT '',
+        quote TEXT NOT NULL DEFAULT '',
+        photoUrl TEXT,
+        galleryUrls TEXT NOT NULL DEFAULT '[]',
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       );
@@ -689,6 +1125,74 @@ export class DataStore {
     };
   }
 
+  private calendarEventFromRow(row: Row): CalendarEventRecord {
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      eventDate: String(row.eventDate),
+      startTime: String(row.startTime),
+      brandID: String(row.brandID),
+      venueID: String(row.venueID),
+      format: String(row.format) as ShowFormat,
+      myRole: String(row.myRole) as ShowRole,
+      showType: String(row.showType) as ShowType,
+      notes: String(row.notes ?? ""),
+      source: String(row.source) as CalendarSource,
+      createdShowID: nullable(row.createdShowID),
+      createdAt: String(row.createdAt),
+      updatedAt: String(row.updatedAt)
+    };
+  }
+
+  private guestbookMessageFromRow(row: Row): GuestbookMessageRecord {
+    return {
+      id: String(row.id),
+      nickname: String(row.nickname),
+      email: nullable(row.email),
+      content: String(row.content),
+      status: String(row.status) as GuestbookStatus,
+      createdAt: String(row.createdAt),
+      updatedAt: String(row.updatedAt)
+    };
+  }
+
+  private diaryPostFromRow(row: Row): DiaryPostRecord {
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      excerpt: String(row.excerpt ?? ""),
+      content: String(row.content ?? ""),
+      status: String(row.status) as DiaryPostStatus,
+      likeCount: Number(row.likeCount ?? 0),
+      publishedAt: nullable(row.publishedAt),
+      createdAt: String(row.createdAt),
+      updatedAt: String(row.updatedAt)
+    };
+  }
+
+  private diaryCommentFromRow(row: Row): DiaryCommentRecord {
+    return {
+      id: String(row.id),
+      postID: String(row.postID),
+      nickname: String(row.nickname),
+      content: String(row.content),
+      createdAt: String(row.createdAt)
+    };
+  }
+
+  private friendFromRow(row: Row): FriendRecord {
+    return {
+      id: String(row.id),
+      performerID: String(row.performerID),
+      bio: String(row.bio ?? ""),
+      quote: String(row.quote ?? ""),
+      photoUrl: nullable(row.photoUrl),
+      galleryUrls: parseJSONList(row.galleryUrls),
+      createdAt: String(row.createdAt),
+      updatedAt: String(row.updatedAt)
+    };
+  }
+
   private toPublicShow(show: ShowRecord, includeNotes: boolean): PublicShowSummary {
     const brand = show.brandID ? this.listBrands().find((item) => item.id === show.brandID) ?? null : null;
     const venue = show.venueID ? this.listVenues().find((item) => item.id === show.venueID) ?? null : null;
@@ -715,6 +1219,249 @@ export class DataStore {
     const show = this.getShow(id);
     if (!show) throw new Error("演出不存在。");
     return show;
+  }
+
+  private toPublicCalendarEvent(event: CalendarEventRecord): PublicCalendarEventSummary {
+    const brand = this.listBrands().find((item) => item.id === event.brandID);
+    const venue = this.listVenues().find((item) => item.id === event.venueID);
+    if (!brand) throw new Error("日历事件关联的厂牌不存在。");
+    if (!venue) throw new Error("日历事件关联的场地不存在。");
+    return {
+      id: event.id,
+      title: event.title,
+      eventDate: event.eventDate,
+      startTime: event.startTime,
+      format: event.format,
+      myRole: event.myRole,
+      showType: event.showType,
+      brand: { id: brand.id, displayName: brand.displayName, cityName: brand.cityName },
+      venue: { id: venue.id, displayName: venue.displayName, cityName: venue.cityName, district: venue.district },
+      notes: event.notes
+    };
+  }
+
+  private requireCalendarEvent(id: string): CalendarEventRecord {
+    const event = this.listCalendarEvents().find((item) => item.id === id);
+    if (!event) throw new Error("日历事件不存在。");
+    return event;
+  }
+
+  private toPublicGuestbookMessage(message: GuestbookMessageRecord) {
+    return {
+      id: message.id,
+      nickname: message.nickname,
+      content: message.content,
+      createdAt: message.createdAt
+    };
+  }
+
+  private toPublicDiaryPostSummary(post: DiaryPostRecord) {
+    return {
+      id: post.id,
+      title: post.title,
+      excerpt: post.excerpt,
+      likeCount: post.likeCount,
+      publishedAt: post.publishedAt
+    };
+  }
+
+  private toPublicDiaryPostDetail(post: DiaryPostRecord): PublicDiaryPostDetail {
+    return {
+      ...this.toPublicDiaryPostSummary(post),
+      content: post.content,
+      comments: this.listDiaryComments(post.id)
+    };
+  }
+
+  private toPublicFriendSummary(friend: FriendRecord): PublicFriendSummary {
+    const performer = this.requireFriendPerformer(friend.performerID);
+    return {
+      ...friend,
+      displayName: performer.displayName,
+      stageName: performer.stageName,
+      relationship: this.friendRelationship(friend.performerID, false)
+    };
+  }
+
+  private toPublicFriendDetail(friend: FriendRecord): PublicFriendDetail {
+    const performer = this.requireFriendPerformer(friend.performerID);
+    return {
+      ...friend,
+      displayName: performer.displayName,
+      stageName: performer.stageName,
+      relationship: this.friendRelationship(friend.performerID, true)
+    };
+  }
+
+  private requireGuestbookMessage(id: string): GuestbookMessageRecord {
+    const message = this.listGuestbookMessages().find((item) => item.id === id);
+    if (!message) throw new Error("留言不存在。");
+    return message;
+  }
+
+  private requireDiaryPost(id: string): DiaryPostRecord {
+    const post = this.getDiaryPost(id);
+    if (!post) throw new Error("日记不存在。");
+    return post;
+  }
+
+  private requirePublicDiaryPost(id: string): DiaryPostRecord {
+    const post = this.requireDiaryPost(id);
+    if (post.status !== "published") throw new Error("日记不存在。");
+    return post;
+  }
+
+  private requireFriend(id: string): FriendRecord {
+    const friend = this.getFriend(id);
+    if (!friend) throw new Error("朋友资料不存在。");
+    return friend;
+  }
+
+  private requireFriendPerformer(performerID: string): PerformerRecord {
+    const performer = this.listPerformers().find((item) => item.id === performerID);
+    if (!performer) throw new Error("朋友关联的演员不存在。");
+    return performer;
+  }
+
+  private findOrCreateImportBrand(displayName: string, cityName: string | null, result: CalendarImportResult): BrandRecord {
+    const normalizedKey = normalizeValue(displayName);
+    const existing = this.listBrands().find((brand) => brand.normalizedKey === normalizedKey);
+    if (existing) return existing;
+    const brand = this.createBrand({ displayName, cityName });
+    result.createdBrands.push({ id: brand.id, displayName: brand.displayName });
+    return brand;
+  }
+
+  private findOrCreateImportVenue(displayName: string, cityName: string | null, result: CalendarImportResult): VenueRecord {
+    const lookupKey = venueLookupKey(displayName, cityName);
+    const existing = this.listVenues().find((venue) => venue.lookupKey === lookupKey);
+    if (existing) return existing;
+    const venue = this.createVenue({ displayName, cityName });
+    result.createdVenues.push({ id: venue.id, displayName: venue.displayName, cityName: venue.cityName });
+    return venue;
+  }
+
+  private calendarEventFromInput(input: CalendarEventInput & {
+    id: string;
+    createdShowID: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }): CalendarEventRecord {
+    const eventDate = requireDate(input.eventDate);
+    const startTime = requireTime(input.startTime);
+    if (!input.brandID) throw new Error("日历事件厂牌不能为空。");
+    if (!input.venueID) throw new Error("日历事件场地不能为空。");
+    return {
+      id: input.id,
+      title: storedTitle(input.title ?? ""),
+      eventDate,
+      startTime,
+      brandID: input.brandID,
+      venueID: input.venueID,
+      format: input.format ?? "standup",
+      myRole: input.myRole ?? "performer",
+      showType: input.showType ?? "showcase",
+      notes: input.notes ?? "",
+      source: input.source ?? "manual",
+      createdShowID: input.createdShowID,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt
+    };
+  }
+
+  private guestbookMessageFromInput(input: GuestbookMessageInput & {
+    id: string;
+    status: GuestbookStatus;
+    createdAt: string;
+    updatedAt: string;
+  }): GuestbookMessageRecord {
+    const nickname = requiredName(input.nickname ?? "", "昵称");
+    const content = String(input.content ?? "").trim();
+    if (!content) throw new Error("留言内容不能为空。");
+    return {
+      id: input.id,
+      nickname,
+      email: asNullableString(input.email),
+      content,
+      status: requireGuestbookStatus(input.status),
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt
+    };
+  }
+
+  private diaryPostFromInput(input: DiaryPostInput & {
+    id: string;
+    likeCount: number;
+    createdAt: string;
+    updatedAt: string;
+  }): DiaryPostRecord {
+    const title = requiredName(input.title ?? "", "日记标题");
+    const content = String(input.content ?? "").trim();
+    const status = requireDiaryPostStatus(input.status ?? "draft");
+    if (!content) throw new Error("日记正文不能为空。");
+    const publishedAt = status === "published" ? asNullableString(input.publishedAt) ?? input.createdAt : asNullableString(input.publishedAt);
+    return {
+      id: input.id,
+      title,
+      excerpt: String(input.excerpt ?? "").trim(),
+      content,
+      status,
+      likeCount: input.likeCount,
+      publishedAt,
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt
+    };
+  }
+
+  private diaryCommentFromInput(input: DiaryCommentInput & {
+    id: string;
+    postID: string;
+    createdAt: string;
+  }): DiaryCommentRecord {
+    const nickname = requiredName(input.nickname ?? "", "昵称");
+    const content = String(input.content ?? "").trim();
+    if (!content) throw new Error("评论内容不能为空。");
+    return {
+      id: input.id,
+      postID: input.postID,
+      nickname,
+      content,
+      createdAt: input.createdAt
+    };
+  }
+
+  private friendFromInput(input: FriendInput & {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+  }): FriendRecord {
+    const performerID = String(input.performerID ?? "").trim();
+    this.requireFriendPerformer(performerID);
+    return {
+      id: input.id,
+      performerID,
+      bio: String(input.bio ?? "").trim(),
+      quote: String(input.quote ?? "").trim(),
+      photoUrl: asNullableString(input.photoUrl),
+      galleryUrls: (input.galleryUrls ?? []).map((url) => String(url).trim()).filter(Boolean).slice(0, 5),
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt
+    };
+  }
+
+  private friendRelationship(performerID: string, includeShows: true): PublicFriendDetail["relationship"];
+  private friendRelationship(performerID: string, includeShows: false): PublicFriendSummary["relationship"];
+  private friendRelationship(performerID: string, includeShows: boolean) {
+    const sharedShows = this.listShows()
+      .filter((show) => show.status === "published")
+      .filter((show) => show.performerIDs.includes(performerID))
+      .sort(byDateAsc)
+      .map((show): FriendSharedShow => ({ id: show.id, title: show.title, date: show.date }));
+    const summary = {
+      sameShowCount: sharedShows.length,
+      firstSharedShowDate: sharedShows.map((show) => show.date).filter(Boolean).at(0) ?? null
+    };
+    return includeShows ? { ...summary, sharedShows } : summary;
   }
 
   private replaceShowPerformers(showID: string, performerIDs: string[]): void {
@@ -773,6 +1520,93 @@ function showParams(show: ShowRecord): RowValue[] {
   ];
 }
 
+function calendarEventParams(event: CalendarEventRecord): RowValue[] {
+  return [
+    event.id,
+    event.title,
+    event.eventDate,
+    event.startTime,
+    event.brandID,
+    event.venueID,
+    event.format,
+    event.myRole,
+    event.showType,
+    event.notes,
+    event.source,
+    event.createdShowID,
+    event.createdAt,
+    event.updatedAt
+  ];
+}
+
+function guestbookMessageParams(message: GuestbookMessageRecord): RowValue[] {
+  return [
+    message.id,
+    message.nickname,
+    message.email,
+    message.content,
+    message.status,
+    message.createdAt,
+    message.updatedAt
+  ];
+}
+
+function diaryPostParams(post: DiaryPostRecord): RowValue[] {
+  return [
+    post.id,
+    post.title,
+    post.excerpt,
+    post.content,
+    post.status,
+    post.likeCount,
+    post.publishedAt,
+    post.createdAt,
+    post.updatedAt
+  ];
+}
+
+function diaryCommentParams(comment: DiaryCommentRecord): RowValue[] {
+  return [
+    comment.id,
+    comment.postID,
+    comment.nickname,
+    comment.content,
+    comment.createdAt
+  ];
+}
+
+function friendParams(friend: FriendRecord): RowValue[] {
+  return [
+    friend.id,
+    friend.performerID,
+    friend.bio,
+    friend.quote,
+    friend.photoUrl,
+    JSON.stringify(friend.galleryUrls),
+    friend.createdAt,
+    friend.updatedAt
+  ];
+}
+
+function localDateKey(date: Date): string {
+  const parts = calendarDateFormatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  if (!year || !month || !day) throw new Error("无法格式化日历日期。");
+  return `${year}-${month}-${day}`;
+}
+
+function addCalendarDays(dateKey: string, days: number): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateKey);
+  if (!match) throw new Error("无法格式化日历日期。");
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const shifted = new Date(Date.UTC(year, month - 1, day + days));
+  return localDateKey(shifted);
+}
+
 function nullable(value: RowValue | undefined): string | null {
   if (value === null || value === undefined) return null;
   const stringValue = String(value);
@@ -793,6 +1627,110 @@ function requiredName(value: string, label: string): string {
   const trimmed = value.trim();
   if (!trimmed) throw new Error(`${label}名称不能为空。`);
   return trimmed;
+}
+
+function requireDate(value: string | undefined): string {
+  const date = String(value ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error("日历事件日期必须是 YYYY-MM-DD。");
+  }
+  const [year, month, day] = date.split("-").map(Number);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new Error("日历事件日期必须是有效的 YYYY-MM-DD。");
+  }
+  return date;
+}
+
+function requireTime(value: string | undefined): string {
+  const time = String(value ?? "").trim();
+  if (!/^\d{2}:\d{2}$/.test(time)) throw new Error("日历事件开始时间必须是 HH:mm。");
+  const [hour, minute] = time.split(":").map(Number);
+  if (hour > 23 || minute > 59) throw new Error("日历事件开始时间必须是有效的 HH:mm。");
+  return time;
+}
+
+function requireGuestbookStatus(value: string | undefined): GuestbookStatus {
+  if (value === "pending" || value === "approved" || value === "hidden") return value;
+  throw new Error("留言状态不正确。");
+}
+
+function requireDiaryPostStatus(value: string | undefined): DiaryPostStatus {
+  if (value === "draft" || value === "published") return value;
+  throw new Error("日记状态不正确。");
+}
+
+function byDateAsc(a: Pick<ShowRecord, "date" | "createdAt">, b: Pick<ShowRecord, "date" | "createdAt">): number {
+  return (a.date ?? a.createdAt).localeCompare(b.date ?? b.createdAt);
+}
+
+const formatByLabel = new Map(Object.entries(formatLabels).map(([key, label]) => [label, key as ShowFormat]));
+const roleByLabel = new Map(Object.entries(roleLabels).map(([key, label]) => [label, key as ShowRole]));
+const typeByLabel = new Map(Object.entries(typeLabels).map(([key, label]) => [label, key as ShowType]));
+
+function parseCalendarRow(
+  row: Partial<CalendarImportRow>,
+  rowNumber: number
+): {
+  value: {
+    date: string;
+    startTime: string;
+    brand: string;
+    venue: string;
+    city: string | null;
+    format: ShowFormat;
+    myRole: ShowRole;
+    showType: ShowType;
+    title: string;
+    notes: string;
+  };
+  errors: CalendarImportResult["errors"];
+} {
+  const errors: CalendarImportResult["errors"] = [];
+  const date = String(row.date ?? "").trim();
+  const startTime = String(row.startTime ?? "").trim();
+  const brand = String(row.brand ?? "").trim();
+  const venue = String(row.venue ?? "").trim();
+  const city = asNullableString(row.city);
+  const format = formatByLabel.get(String(row.format ?? "").trim());
+  const myRole = roleByLabel.get(String(row.myRole ?? "").trim());
+  const showType = typeByLabel.get(String(row.showType ?? "").trim());
+
+  try {
+    requireDate(date);
+  } catch (error) {
+    errors.push({ row: rowNumber, field: "date", message: (error as Error).message });
+  }
+  try {
+    requireTime(startTime);
+  } catch (error) {
+    errors.push({ row: rowNumber, field: "startTime", message: (error as Error).message });
+  }
+  if (!brand) errors.push({ row: rowNumber, field: "brand", message: "厂牌不能为空。" });
+  if (!venue) errors.push({ row: rowNumber, field: "venue", message: "场地不能为空。" });
+  if (!format) errors.push({ row: rowNumber, field: "format", message: "形式必须是单口、漫才、即兴、新喜剧或其他。" });
+  if (!myRole) errors.push({ row: rowNumber, field: "myRole", message: "角色必须是主持、演员、主咖、开场或其他。" });
+  if (!showType) errors.push({ row: rowNumber, field: "showType", message: "类型必须是开放麦、商演、主打秀、专场、比赛或其他。" });
+
+  return {
+    value: {
+      date,
+      startTime,
+      brand,
+      venue,
+      city,
+      format: format ?? "other",
+      myRole: myRole ?? "other",
+      showType: showType ?? "other",
+      title: storedTitle(row.title ?? `${brand} ${row.showType ?? ""}`),
+      notes: String(row.notes ?? "")
+    },
+    errors
+  };
 }
 
 function byDateDesc(a: ShowRecord, b: ShowRecord): number {

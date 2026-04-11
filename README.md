@@ -2,7 +2,7 @@
 
 XYSG Web 是 XYSG / TicketSave 的公开展览端和单管理员管理端。
 
-- 公开端：`/` 票根墙，`/shows/:id` 演出详情。
+- 公开端：`/` 马达的喜剧中心首页，`/tickets` 票根墙，`/shows/:id` 演出详情，`/calendar` 演出日历。
 - 管理端：`/admin`，使用 `ADMIN_PASSWORD` 登录。
 - 存储：SQLite 文件和封面图都放在 `DATA_DIR`。
 - 备份：导入/导出格式兼容 iOS 的 schema v2 ZIP。
@@ -16,6 +16,36 @@ npm run dev
 ```
 
 默认前端开发地址是 `http://localhost:5173`，API 服务端口由 `.env` 的 `PORT` 控制。
+
+## 功能入口
+
+- `/`：马达的喜剧中心首页。
+- `/tickets`：票根墙。
+- `/calendar`：演出日历，支持月历和列表视图。
+- `/admin`：后台管理，包含票根、实体、日历和备份。
+
+## 日历 JSON 导入
+
+后台日历管理页提供 JSON 示例下载。导入格式是一个数组：
+
+```json
+[
+  {
+    "date": "2026-04-18",
+    "startTime": "20:00",
+    "brand": "某某喜剧",
+    "venue": "某某剧场",
+    "city": "上海",
+    "format": "单口",
+    "myRole": "主持",
+    "showType": "开放麦",
+    "title": "周六开放麦",
+    "notes": "可选备注"
+  }
+]
+```
+
+导入时会自动匹配厂牌和场地；如果找不到，会自动创建并在导入结果里汇总。
 
 ## 生产构建
 
