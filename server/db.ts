@@ -26,7 +26,12 @@ import {
   type DiaryPostInput,
   type DiaryPostRecord,
   type DiaryPostStatus,
+  type FriendInput,
+  type FriendRecord,
+  type FriendSharedShow,
   type PublicDiaryPostDetail,
+  type PublicFriendDetail,
+  type PublicFriendSummary,
   type ArchiveSummary,
   type BackupPayload,
   type BackupShowRecord,
@@ -727,6 +732,64 @@ export class DataStore {
     return comment;
   }
 
+  listFriends(): FriendRecord[] {
+    return this.queryAll("SELECT * FROM friends ORDER BY updatedAt DESC").map((row) => this.friendFromRow(row));
+  }
+
+  listPublicFriends(): PublicFriendSummary[] {
+    return this.listFriends().map((friend) => this.toPublicFriendSummary(friend));
+  }
+
+  getPublicFriend(id: string): PublicFriendDetail | null {
+    const friend = this.getFriend(id);
+    return friend ? this.toPublicFriendDetail(friend) : null;
+  }
+
+  getFriend(id: string): FriendRecord | null {
+    const row = this.queryOne("SELECT * FROM friends WHERE id = ?", [id]);
+    return row ? this.friendFromRow(row) : null;
+  }
+
+  createFriend(input: FriendInput): FriendRecord {
+    const now = nowISO();
+    const friend = this.friendFromInput({
+      ...input,
+      id: uuidv4(),
+      createdAt: now,
+      updatedAt: now
+    });
+    this.db.run(
+      "INSERT INTO friends (id, performerID, bio, quote, photoUrl, galleryUrls, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      friendParams(friend)
+    );
+    this.persist();
+    return friend;
+  }
+
+  updateFriend(id: string, input: FriendInput): FriendRecord {
+    const existing = this.requireFriend(id);
+    const updated = this.friendFromInput({
+      ...existing,
+      ...input,
+      id,
+      createdAt: existing.createdAt,
+      updatedAt: nowISO()
+    });
+    this.db.run(
+      `UPDATE friends SET
+       performerID = ?, bio = ?, quote = ?, photoUrl = ?, galleryUrls = ?, updatedAt = ?
+       WHERE id = ?`,
+      [updated.performerID, updated.bio, updated.quote, updated.photoUrl, JSON.stringify(updated.galleryUrls), updated.updatedAt, id]
+    );
+    this.persist();
+    return updated;
+  }
+
+  deleteFriend(id: string): void {
+    this.db.run("DELETE FROM friends WHERE id = ?", [id]);
+    this.persist();
+  }
+
   getAdminSnapshot() {
     return {
       shows: this.listShows().sort(byDateDesc),
@@ -812,6 +875,7 @@ export class DataStore {
     this.db.run("DELETE FROM guestbook_messages");
     this.db.run("DELETE FROM diary_comments");
     this.db.run("DELETE FROM diary_posts");
+    this.db.run("DELETE FROM friends");
     this.db.run("DELETE FROM shows");
     this.db.run("DELETE FROM performers");
     this.db.run("DELETE FROM brands");
@@ -951,6 +1015,16 @@ export class DataStore {
         nickname TEXT NOT NULL,
         content TEXT NOT NULL,
         createdAt TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS friends (
+        id TEXT PRIMARY KEY,
+        performerID TEXT NOT NULL,
+        bio TEXT NOT NULL DEFAULT '',
+        quote TEXT NOT NULL DEFAULT '',
+        photoUrl TEXT,
+        galleryUrls TEXT NOT NULL DEFAULT '[]',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
       );
       CREATE TABLE IF NOT EXISTS show_performers (showID TEXT NOT NULL, performerID TEXT NOT NULL, sortOrder INTEGER NOT NULL DEFAULT 0);
       CREATE TABLE IF NOT EXISTS performer_brands (performerID TEXT NOT NULL, brandID TEXT NOT NULL);
@@ -1106,6 +1180,19 @@ export class DataStore {
     };
   }
 
+  private friendFromRow(row: Row): FriendRecord {
+    return {
+      id: String(row.id),
+      performerID: String(row.performerID),
+      bio: String(row.bio ?? ""),
+      quote: String(row.quote ?? ""),
+      photoUrl: nullable(row.photoUrl),
+      galleryUrls: parseJSONList(row.galleryUrls),
+      createdAt: String(row.createdAt),
+      updatedAt: String(row.updatedAt)
+    };
+  }
+
   private toPublicShow(show: ShowRecord, includeNotes: boolean): PublicShowSummary {
     const brand = show.brandID ? this.listBrands().find((item) => item.id === show.brandID) ?? null : null;
     const venue = show.venueID ? this.listVenues().find((item) => item.id === show.venueID) ?? null : null;
@@ -1186,6 +1273,26 @@ export class DataStore {
     };
   }
 
+  private toPublicFriendSummary(friend: FriendRecord): PublicFriendSummary {
+    const performer = this.requireFriendPerformer(friend.performerID);
+    return {
+      ...friend,
+      displayName: performer.displayName,
+      stageName: performer.stageName,
+      relationship: this.friendRelationship(friend.performerID, false)
+    };
+  }
+
+  private toPublicFriendDetail(friend: FriendRecord): PublicFriendDetail {
+    const performer = this.requireFriendPerformer(friend.performerID);
+    return {
+      ...friend,
+      displayName: performer.displayName,
+      stageName: performer.stageName,
+      relationship: this.friendRelationship(friend.performerID, true)
+    };
+  }
+
   private requireGuestbookMessage(id: string): GuestbookMessageRecord {
     const message = this.listGuestbookMessages().find((item) => item.id === id);
     if (!message) throw new Error("留言不存在。");
@@ -1202,6 +1309,18 @@ export class DataStore {
     const post = this.requireDiaryPost(id);
     if (post.status !== "published") throw new Error("日记不存在。");
     return post;
+  }
+
+  private requireFriend(id: string): FriendRecord {
+    const friend = this.getFriend(id);
+    if (!friend) throw new Error("朋友资料不存在。");
+    return friend;
+  }
+
+  private requireFriendPerformer(performerID: string): PerformerRecord {
+    const performer = this.listPerformers().find((item) => item.id === performerID);
+    if (!performer) throw new Error("朋友关联的演员不存在。");
+    return performer;
   }
 
   private findOrCreateImportBrand(displayName: string, cityName: string | null, result: CalendarImportResult): BrandRecord {
@@ -1309,6 +1428,40 @@ export class DataStore {
       content,
       createdAt: input.createdAt
     };
+  }
+
+  private friendFromInput(input: FriendInput & {
+    id: string;
+    createdAt: string;
+    updatedAt: string;
+  }): FriendRecord {
+    const performerID = String(input.performerID ?? "").trim();
+    this.requireFriendPerformer(performerID);
+    return {
+      id: input.id,
+      performerID,
+      bio: String(input.bio ?? "").trim(),
+      quote: String(input.quote ?? "").trim(),
+      photoUrl: asNullableString(input.photoUrl),
+      galleryUrls: (input.galleryUrls ?? []).map((url) => String(url).trim()).filter(Boolean).slice(0, 5),
+      createdAt: input.createdAt,
+      updatedAt: input.updatedAt
+    };
+  }
+
+  private friendRelationship(performerID: string, includeShows: true): PublicFriendDetail["relationship"];
+  private friendRelationship(performerID: string, includeShows: false): PublicFriendSummary["relationship"];
+  private friendRelationship(performerID: string, includeShows: boolean) {
+    const sharedShows = this.listShows()
+      .filter((show) => show.status === "published")
+      .filter((show) => show.performerIDs.includes(performerID))
+      .sort(byDateAsc)
+      .map((show): FriendSharedShow => ({ id: show.id, title: show.title, date: show.date }));
+    const summary = {
+      sameShowCount: sharedShows.length,
+      firstSharedShowDate: sharedShows.map((show) => show.date).filter(Boolean).at(0) ?? null
+    };
+    return includeShows ? { ...summary, sharedShows } : summary;
   }
 
   private replaceShowPerformers(showID: string, performerIDs: string[]): void {
@@ -1422,6 +1575,19 @@ function diaryCommentParams(comment: DiaryCommentRecord): RowValue[] {
   ];
 }
 
+function friendParams(friend: FriendRecord): RowValue[] {
+  return [
+    friend.id,
+    friend.performerID,
+    friend.bio,
+    friend.quote,
+    friend.photoUrl,
+    JSON.stringify(friend.galleryUrls),
+    friend.createdAt,
+    friend.updatedAt
+  ];
+}
+
 function localDateKey(date: Date): string {
   const parts = calendarDateFormatter.formatToParts(date);
   const year = parts.find((part) => part.type === "year")?.value;
@@ -1496,6 +1662,10 @@ function requireGuestbookStatus(value: string | undefined): GuestbookStatus {
 function requireDiaryPostStatus(value: string | undefined): DiaryPostStatus {
   if (value === "draft" || value === "published") return value;
   throw new Error("日记状态不正确。");
+}
+
+function byDateAsc(a: Pick<ShowRecord, "date" | "createdAt">, b: Pick<ShowRecord, "date" | "createdAt">): number {
+  return (a.date ?? a.createdAt).localeCompare(b.date ?? b.createdAt);
 }
 
 const formatByLabel = new Map(Object.entries(formatLabels).map(([key, label]) => [label, key as ShowFormat]));

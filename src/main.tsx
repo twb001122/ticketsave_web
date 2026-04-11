@@ -7,9 +7,11 @@ import { PerformerPicker } from "./performer-picker";
 import { HomePage } from "./home-page";
 import { GuestbookPage } from "./guestbook-page";
 import { DiaryPage } from "./diary-page";
+import { FriendsPage } from "./friends-page";
 import { CalendarAdmin } from "./admin-calendar";
 import { GuestbookAdmin } from "./admin-guestbook";
 import { DiaryAdmin } from "./admin-diary";
+import { FriendsAdmin } from "./admin-friends";
 import {
   formatLabels,
   roleLabels,
@@ -44,8 +46,10 @@ function routeFromLocation(): Route {
   const path = window.location.pathname;
   const showMatch = path.match(/^\/shows\/([^/]+)/);
   const diaryMatch = path.match(/^\/diary\/([^/]+)/);
+  const friendMatch = path.match(/^\/friends\/([^/]+)/);
   if (showMatch) return { path: "/shows/:id", params: { id: showMatch[1] } };
   if (diaryMatch) return { path: "/diary/:id", params: { id: diaryMatch[1] } };
+  if (friendMatch) return { path: "/friends/:id", params: { id: friendMatch[1] } };
   if (path.startsWith("/admin")) return { path: "/admin", params: {} };
   if (path.startsWith("/tickets")) return { path: "/tickets", params: {} };
   if (path.startsWith("/calendar")) return { path: "/calendar", params: {} };
@@ -76,7 +80,8 @@ export function App() {
   if (route.path === "/guestbook") return <GuestbookPage onNavigate={navigate} />;
   if (route.path === "/diary/:id") return <DiaryPage onNavigate={navigate} postID={route.params.id} />;
   if (route.path === "/diary") return <DiaryPage onNavigate={navigate} />;
-  if (route.path === "/friends") return <ComingSoonPage title="马达和他的朋友们" onNavigate={navigate} />;
+  if (route.path === "/friends/:id") return <FriendsPage onNavigate={navigate} friendID={route.params.id} />;
+  if (route.path === "/friends") return <FriendsPage onNavigate={navigate} />;
   return <HomePage onNavigate={navigate} />;
 }
 
@@ -240,7 +245,7 @@ function AdminApp() {
   const [checking, setChecking] = useState(true);
   const [password, setPassword] = useState("");
   const [snapshot, setSnapshot] = useState<Snapshot>(emptySnapshot);
-  const [tab, setTab] = useState<"shows" | "entities" | "calendar" | "guestbook" | "diary" | "backup">("shows");
+  const [tab, setTab] = useState<"shows" | "entities" | "calendar" | "guestbook" | "diary" | "friends" | "backup">("shows");
 
   useEffect(() => {
     fetch("/api/admin/me")
@@ -294,6 +299,7 @@ function AdminApp() {
         <button className={tab === "calendar" ? "active" : ""} onClick={() => setTab("calendar")}>日历</button>
         <button className={tab === "guestbook" ? "active" : ""} onClick={() => setTab("guestbook")}>留言</button>
         <button className={tab === "diary" ? "active" : ""} onClick={() => setTab("diary")}>日记</button>
+        <button className={tab === "friends" ? "active" : ""} onClick={() => setTab("friends")}>朋友</button>
         <button className={tab === "backup" ? "active" : ""} onClick={() => setTab("backup")}>备份</button>
       </nav>
       {tab === "shows" ? <ShowAdmin snapshot={snapshot} onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
@@ -301,6 +307,7 @@ function AdminApp() {
       {tab === "calendar" ? <CalendarAdmin brands={snapshot.brands} venues={snapshot.venues} onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
       {tab === "guestbook" ? <GuestbookAdmin /> : null}
       {tab === "diary" ? <DiaryAdmin /> : null}
+      {tab === "friends" ? <FriendsAdmin performers={snapshot.performers} /> : null}
       {tab === "backup" ? <BackupAdmin onChanged={() => refreshSnapshot(setSnapshot)} /> : null}
     </main>
   );

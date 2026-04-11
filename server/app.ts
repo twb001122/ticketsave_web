@@ -127,6 +127,16 @@ export async function createServerApp(options: ServerAppOptions) {
     }
   });
 
+  app.get("/api/public/friends", (_req, res) => {
+    res.json({ items: options.store.listPublicFriends() });
+  });
+
+  app.get("/api/public/friends/:id", (req, res) => {
+    const friend = options.store.getPublicFriend(String(req.params.id));
+    if (!friend) return res.status(404).json({ error: "朋友资料不存在。" });
+    res.json(friend);
+  });
+
   app.get("/covers/:fileName", (req, res) => {
     const data = options.store.readCover(req.params.fileName);
     if (!data) return res.status(404).end();
@@ -302,6 +312,35 @@ export async function createServerApp(options: ServerAppOptions) {
     }
   });
 
+  app.get("/api/admin/friends", requireAdmin, (_req, res) => {
+    res.json({ items: options.store.listFriends() });
+  });
+
+  app.post("/api/admin/friends", requireAdmin, (req, res, next) => {
+    try {
+      res.status(201).json(options.store.createFriend(parseFriendBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.put("/api/admin/friends/:id", requireAdmin, (req, res, next) => {
+    try {
+      res.json(options.store.updateFriend(String(req.params.id), parseFriendBody(req.body)));
+    } catch (error) {
+      next(error);
+    }
+  });
+
+  app.delete("/api/admin/friends/:id", requireAdmin, (req, res, next) => {
+    try {
+      options.store.deleteFriend(String(req.params.id));
+      res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/admin/backup/import", requireAdmin, upload.single("archive"), async (req, res, next) => {
     try {
       if (!req.file) return res.status(400).json({ error: "请选择 zip 备份文件。" });
@@ -413,6 +452,16 @@ function parseDiaryPostBody(body: Record<string, unknown>) {
     content: typeof body.content === "string" ? body.content : undefined,
     status: typeof body.status === "string" ? body.status as DiaryPostStatus : undefined,
     publishedAt: typeof body.publishedAt === "string" ? body.publishedAt : null
+  };
+}
+
+function parseFriendBody(body: Record<string, unknown>) {
+  return {
+    performerID: typeof body.performerID === "string" ? body.performerID : undefined,
+    bio: typeof body.bio === "string" ? body.bio : undefined,
+    quote: typeof body.quote === "string" ? body.quote : undefined,
+    photoUrl: typeof body.photoUrl === "string" ? body.photoUrl : null,
+    galleryUrls: Array.isArray(body.galleryUrls) ? body.galleryUrls.map(String) : []
   };
 }
 

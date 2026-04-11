@@ -9,7 +9,7 @@ const modules = [
   { title: "本周演出日历", body: "看看接下来在哪上台。", path: "/calendar", enabled: true },
   { title: "留言精选", body: "现场之后，留下那句想说的话。", path: "/guestbook", enabled: true },
   { title: "日记精选", body: "写下台前台后没讲完的话。", path: "/diary", enabled: true },
-  { title: "马达和他的朋友们", body: "第三期开放。", path: "/friends", enabled: false }
+  { title: "马达和他的朋友们", body: "看看那些一起把现场点亮的人。", path: "/friends", enabled: true }
 ];
 
 export function HomePage({ onNavigate }: HomePageProps) {

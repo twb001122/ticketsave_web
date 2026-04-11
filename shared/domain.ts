@@ -299,6 +299,48 @@ export interface DiaryPageResult {
   nextOffset: number | null;
 }
 
+export interface FriendRecord {
+  id: string;
+  performerID: string;
+  bio: string;
+  quote: string;
+  photoUrl: string | null;
+  galleryUrls: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FriendInput {
+  performerID?: string;
+  bio?: string;
+  quote?: string;
+  photoUrl?: string | null;
+  galleryUrls?: string[];
+}
+
+export interface FriendRelationshipSummary {
+  sameShowCount: number;
+  firstSharedShowDate: string | null;
+}
+
+export interface FriendSharedShow {
+  id: string;
+  title: string;
+  date: string | null;
+}
+
+export interface PublicFriendSummary extends FriendRecord {
+  displayName: string;
+  stageName: string | null;
+  relationship: FriendRelationshipSummary;
+}
+
+export interface PublicFriendDetail extends PublicFriendSummary {
+  relationship: FriendRelationshipSummary & {
+    sharedShows: FriendSharedShow[];
+  };
+}
+
 export function normalizeValue(rawValue: string): string {
   return rawValue.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
 }
