@@ -1355,8 +1355,8 @@ export class DataStore {
       title: storedTitle(input.title ?? ""),
       eventDate,
       startTime,
-      brandID: input.brandID,
-      venueID: input.venueID,
+      brandID: requireCalendarEntityID(input.brandID, "厂牌"),
+      venueID: requireCalendarEntityID(input.venueID, "场地"),
       format: input.format ?? "standup",
       myRole: input.myRole ?? "performer",
       showType: input.showType ?? "showcase",
@@ -1651,6 +1651,12 @@ function requireTime(value: string | undefined): string {
   const [hour, minute] = time.split(":").map(Number);
   if (hour > 23 || minute > 59) throw new Error("日历事件开始时间必须是有效的 HH:mm。");
   return time;
+}
+
+function requireCalendarEntityID(value: string | undefined, label: string): string {
+  const id = String(value ?? "").trim();
+  if (!id) throw new Error(`日历事件必须关联${label}。`);
+  return id;
 }
 
 function requireGuestbookStatus(value: string | undefined): GuestbookStatus {

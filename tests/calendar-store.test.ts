@@ -155,6 +155,35 @@ describe("calendar event store", () => {
     expect(() => store.deleteVenue(venue.id)).toThrow("场地仍被日历事件引用，暂时不能删除。");
   });
 
+  it("requires calendar events to reference a brand and venue", async () => {
+    const store = await createDataStore({ inMemory: true });
+    const brand = store.createBrand({ displayName: "笑声工厂", cityName: "上海" });
+
+    expect(() =>
+      store.createCalendarEvent({
+        title: "周六开放麦",
+        eventDate: "2026-04-18",
+        startTime: "20:00",
+        venueID: "venue-1",
+        format: "standup",
+        myRole: "host",
+        showType: "openMic"
+      })
+    ).toThrow("日历事件必须关联厂牌。");
+
+    expect(() =>
+      store.createCalendarEvent({
+        title: "周六开放麦",
+        eventDate: "2026-04-18",
+        startTime: "20:00",
+        brandID: brand.id,
+        format: "standup",
+        myRole: "host",
+        showType: "openMic"
+      })
+    ).toThrow("日历事件必须关联场地。");
+  });
+
   it("rejects impossible calendar dates", async () => {
     const store = await createDataStore({ inMemory: true });
     const brand = store.createBrand({ displayName: "笑声工厂", cityName: "上海" });
