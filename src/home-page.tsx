@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchJSON } from "./api";
+import { SiteNav, siteNavItems } from "./site-nav";
 import {
   formatLabels,
   roleLabels,
@@ -42,17 +43,6 @@ const emptyHomeData: HomeData = {
   messages: []
 };
 
-const navItems = [
-  { label: "首页", path: "/" },
-  { label: "演出日历", path: "/calendar" },
-  { label: "票根精选", path: "/tickets" },
-  { label: "日记精选", path: "/diary" },
-  { label: "马达和他的朋友们", path: "/friends" },
-  { label: "留言精选", path: "/guestbook" },
-  { label: "关于", path: "#about" },
-  { label: "后台管理", path: "/admin" }
-];
-
 export function HomePage({ onNavigate }: HomePageProps) {
   const [data, setData] = useState<HomeData>(emptyHomeData);
   const [loading, setLoading] = useState(true);
@@ -84,64 +74,62 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
   return (
     <main className="home-page">
-      <header className="home-nav">
-        <button type="button" className="home-brand" onClick={() => go("/")}>
-          <img src="/app-icon.png" alt="XYSG" />
-          <span>马达的喜剧中心</span>
-        </button>
-        <nav className="home-nav-links" aria-label="首页导航">
-          {navItems.map((item) => (
-            <button
-              key={item.path}
-              type="button"
-              className={item.path === "/" ? "active" : ""}
-              onClick={() => go(item.path)}
-            >
-              {item.label}
-            </button>
-          ))}
-        </nav>
-      </header>
+      <SiteNav onNavigate={onNavigate} activePath="/" />
 
       <section className="home-hero">
         <div>
-          <p className="eyebrow">Comedy Center</p>
-          <h1>脱口秀演员马达</h1>
+          <p className="eyebrow">DongSi Brings People Together</p>
+          <h1 className="home-hero-title" aria-label="马达的 喜剧路口">
+            <span>马达的</span>
+            <span className="home-title-accent">喜剧路口</span>
+          </h1>
           <p className="home-hero-copy">
-            这里收藏每一次上台、每一张票根、每一段台前台后的文字，也慢慢长出一张和朋友、观众、现场有关的喜剧地图。
+            这里会记录一下马达的演出、他的日记、他的观众、他的朋友、他的喜剧、他的夏天和他的东四。
           </p>
-          <div className="home-hero-actions">
-            <button type="button" className="primary-button" onClick={() => go("/calendar")}>看最近演出</button>
-            <button type="button" className="ghost-button" onClick={() => go("/tickets")}>进入票根档案</button>
-          </div>
         </div>
-        <div className="home-hero-note home-glass">
-          <p>今日入口</p>
-          <strong>最近演出、票根、日记、留言，都放在同一个慢慢更新的首页里。</strong>
-          <span>{loading ? "正在整理内容..." : `${data.tickets.length} 张票根 · ${data.calendarEvents.length} 场近期演出`}</span>
+        <div className="home-hero-entry home-glass" aria-label="今日入口卡片">
+          <span className="hero-entry-icon" aria-hidden="true">✦</span>
+          <p>TODAY'S ENTRY</p>
+          <strong>胡同里的笑声</strong>
+          <div className="hero-entry-story">
+            <img
+              className="hero-entry-cover"
+              src="https://images.pexels.com/photos/34939602/pexels-photo-34939602.jpeg?auto=compress&cs=tinysrgb&w=720"
+              alt="东四路口的夜色"
+            />
+            <div>
+              <blockquote>“东四的夏夜，蝉鸣和笑声一样响亮。”</blockquote>
+              <span>Read 4 min ago</span>
+            </div>
+          </div>
+          <div className="hero-entry-footer">
+            <div className="hero-entry-readers" aria-label="18 人读过">
+              <img
+                src="https://images.pexels.com/photos/36741810/pexels-photo-36741810.jpeg?auto=compress&cs=tinysrgb&w=120"
+                alt="读者头像一"
+              />
+              <img
+                src="https://images.pexels.com/photos/30494309/pexels-photo-30494309.jpeg?auto=compress&cs=tinysrgb&w=120"
+                alt="读者头像二"
+              />
+              <img
+                src="https://images.pexels.com/photos/31150358/pexels-photo-31150358.jpeg?auto=compress&cs=tinysrgb&w=120"
+                alt="读者头像三"
+              />
+              <img
+                src="https://images.pexels.com/photos/29839522/pexels-photo-29839522.jpeg?auto=compress&cs=tinysrgb&w=120"
+                alt="读者头像四"
+              />
+              <em>+14</em>
+            </div>
+            <span className="hero-entry-date">June 15 · Dongsi Road</span>
+          </div>
         </div>
       </section>
 
       <section className="home-activity" aria-label="最近发生">
         <SectionHeading eyebrow="Recent Activity" title="最近发生" actionLabel="查看全部演出日历" onAction={() => go("/calendar")} />
-        <div className="activity-ticker home-glass" aria-label="播放中的最近动态" aria-live="polite">
-          {activityItems.length === 0 ? (
-            <p className="muted">{loading ? "正在整理最近更新..." : "最近更新还在整理中。"}</p>
-          ) : (
-            <div
-              className="activity-ticker-track"
-              style={{ "--activity-count": activityItems.length } as React.CSSProperties}
-            >
-              {activityItems.map((item) => (
-                <button key={item.id} type="button" className="activity-item" onClick={() => go(item.path)}>
-                  <span className={`activity-icon activity-tone-${item.tone}`} aria-hidden="true">{item.icon}</span>
-                  <strong>{item.text}</strong>
-                  <em>{item.timeLabel}</em>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <ActivityTypewriter items={activityItems} loading={loading} onNavigate={go} />
       </section>
 
       <section className="home-section home-calendar-section" aria-label="本周演出日历">
@@ -201,9 +189,10 @@ export function HomePage({ onNavigate }: HomePageProps) {
           {data.friends.slice(0, 4).map((friend) => (
             <button key={friend.id} type="button" className="home-friend-card" onClick={() => go(`/friends/${friend.id}`)}>
               <FriendPhoto friend={friend} />
+              <span className="home-friend-kicker">{friend.stageName ?? "Comedy Friend"}</span>
               <strong>{friend.displayName}</strong>
-              <span>{friend.stageName ?? "Comedy Friend"}</span>
-              <p>{friend.relationship.sameShowCount > 0 ? `和马达同台 ${friend.relationship.sameShowCount} 场` : friend.bio}</p>
+              <p>{friend.bio}</p>
+              <em>{friend.relationship.sameShowCount > 0 ? `同台 ${friend.relationship.sameShowCount} 场` : "资料整理中"}</em>
             </button>
           ))}
           {data.friends.length === 0 ? <p className="muted">朋友资料还在慢慢补全。</p> : null}
@@ -212,9 +201,9 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
       <section className="home-section" aria-label="留言精选">
         <SectionHeading eyebrow="Guestbook" title="留言精选" actionLabel="去留言板" onAction={() => go("/guestbook")} />
-        <div className="home-message-grid">
+        <div className="home-message-list">
           {data.messages.slice(0, 5).map((message) => (
-            <article className="home-message-card home-card" key={message.id}>
+            <article className="home-message-line" key={message.id}>
               <p>{message.content}</p>
               <span>{message.nickname} · {formatShortDate(message.createdAt)}</span>
             </article>
@@ -225,15 +214,15 @@ export function HomePage({ onNavigate }: HomePageProps) {
 
       <footer id="about" className="home-footer">
         <div>
-          <strong>马达的喜剧中心</strong>
-          <p>一个持续更新的个人喜剧档案：演出、票根、日记、朋友和观众留下的话。</p>
+          <strong>马达的喜剧路口</strong>
+          <p>这里会记录一下脱口秀演员马达的演出、他的日记、他的观众、他的朋友、他的喜剧、他的夏天和他的东四。</p>
         </div>
         <div className="home-footer-links">
-          {navItems.filter((item) => item.path !== "#about").map((item) => (
+          {siteNavItems.filter((item) => item.path !== "#about").map((item) => (
             <button key={item.path} type="button" onClick={() => go(item.path)}>{item.label}</button>
           ))}
         </div>
-        <span>© {new Date().getFullYear()} Mada Comedy Center</span>
+        <span>© {new Date().getFullYear()} Mada Comedy Crossroads</span>
       </footer>
     </main>
   );
@@ -258,6 +247,83 @@ function SectionHeading({
       </div>
       <button type="button" className="text-link" onClick={onAction}>{actionLabel}</button>
     </div>
+  );
+}
+
+function ActivityTypewriter({
+  items,
+  loading,
+  onNavigate
+}: {
+  items: ActivityItem[];
+  loading: boolean;
+  onNavigate: (path: string) => void;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [typedText, setTypedText] = useState("");
+  const [phase, setPhase] = useState<"blink" | "typing" | "hold" | "exit">("blink");
+  const activeItem = items[activeIndex % Math.max(items.length, 1)];
+  const fullText = activeItem?.text ?? "";
+
+  useEffect(() => {
+    setActiveIndex(0);
+    setTypedText("");
+    setPhase("blink");
+  }, [items.length]);
+
+  useEffect(() => {
+    if (!activeItem) return;
+
+    if (phase === "blink") {
+      const timer = window.setTimeout(() => setPhase("typing"), 900);
+      return () => window.clearTimeout(timer);
+    }
+
+    if (phase === "typing") {
+      if (typedText.length < fullText.length) {
+        const timer = window.setTimeout(() => setTypedText(fullText.slice(0, typedText.length + 1)), 42);
+        return () => window.clearTimeout(timer);
+      }
+      const timer = window.setTimeout(() => setPhase("hold"), 700);
+      return () => window.clearTimeout(timer);
+    }
+
+    if (phase === "hold") {
+      const timer = window.setTimeout(() => setPhase("exit"), 1100);
+      return () => window.clearTimeout(timer);
+    }
+
+    const timer = window.setTimeout(() => {
+      setTypedText("");
+      setActiveIndex((current) => (current + 1) % items.length);
+      setPhase("blink");
+    }, 320);
+    return () => window.clearTimeout(timer);
+  }, [activeItem, fullText, items.length, phase, typedText]);
+
+  if (!activeItem) {
+    return (
+      <div className="activity-typewriter home-glass" aria-label="最近发生输入动画" aria-live="polite">
+        <p className="muted">{loading ? "正在整理最近更新..." : "最近更新还在整理中。"}</p>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className={`activity-typewriter home-glass is-${phase}`}
+      aria-label="最近发生输入动画"
+      aria-live="polite"
+      onClick={() => onNavigate(activeItem.path)}
+    >
+      <span className={`activity-icon activity-tone-${activeItem.tone}`} aria-hidden="true">{activeItem.icon}</span>
+      <span className="activity-typewriter-copy">
+        <strong>{typedText}</strong>
+        <i aria-hidden="true" />
+      </span>
+      <em>{activeItem.timeLabel}</em>
+    </button>
   );
 }
 
@@ -307,7 +373,7 @@ function buildActivityItems(data: HomeData): ActivityItem[] {
       id: `calendar-${event.id}`,
       icon: "日",
       tone: "calendar" as const,
-      text: `马达有一场演出：${event.title}`,
+      text: `马达添加了一个演出：${event.title}`,
       timeLabel: formatShortDate(event.eventDate),
       timeValue: toTimeValue(`${event.eventDate}T${event.startTime || "00:00"}:00+08:00`),
       path: "/calendar"
@@ -316,7 +382,7 @@ function buildActivityItems(data: HomeData): ActivityItem[] {
       id: `ticket-${ticket.id}`,
       icon: "票",
       tone: "ticket" as const,
-      text: `马达留下了一张票根：${ticket.title}`,
+      text: `马达更新了一个票根：${ticket.title}`,
       timeLabel: formatActivityTime(ticket.date),
       timeValue: toTimeValue(ticket.date),
       path: `/shows/${ticket.id}`
@@ -325,7 +391,7 @@ function buildActivityItems(data: HomeData): ActivityItem[] {
       id: `diary-${post.id}`,
       icon: "记",
       tone: "diary" as const,
-      text: `马达发布了日记：${post.title}`,
+      text: `马达发布了一篇日记：${post.title}`,
       timeLabel: formatActivityTime(post.publishedAt),
       timeValue: toTimeValue(post.publishedAt),
       path: `/diary/${post.id}`
@@ -334,7 +400,7 @@ function buildActivityItems(data: HomeData): ActivityItem[] {
       id: `friend-${friend.id}`,
       icon: "友",
       tone: "friend" as const,
-      text: `马达整理了朋友资料：${friend.displayName}`,
+      text: `马达添加了一个朋友：${friend.displayName}`,
       timeLabel: formatActivityTime(friend.updatedAt ?? friend.createdAt),
       timeValue: toTimeValue(friend.updatedAt ?? friend.createdAt),
       path: `/friends/${friend.id}`
@@ -343,7 +409,7 @@ function buildActivityItems(data: HomeData): ActivityItem[] {
       id: `message-${message.id}`,
       icon: "言",
       tone: "message" as const,
-      text: `${message.nickname} 留下了一句留言`,
+      text: `${message.nickname} 留下了一条留言`,
       timeLabel: formatActivityTime(message.createdAt),
       timeValue: toTimeValue(message.createdAt),
       path: "/guestbook"

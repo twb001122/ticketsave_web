@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { fetchJSON } from "./api";
+import { SiteNav } from "./site-nav";
 import type { PublicFriendDetail, PublicFriendSummary } from "../shared/domain";
 
 export function FriendsPage({ onNavigate, friendID }: { onNavigate: (path: string) => void; friendID?: string }) {
@@ -16,13 +17,7 @@ function FriendList({ onNavigate }: { onNavigate: (path: string) => void }) {
 
   return (
     <main className="page friends-page">
-      <header className="topbar glass-nav">
-        <button type="button" className="brand-lockup" onClick={() => onNavigate("/")}>
-          <img src="/app-icon.png" alt="XYSG" />
-          <span>马达和他的朋友们</span>
-        </button>
-        <button type="button" className="ghost-button glass-button" onClick={() => onNavigate("/tickets")}>去票根墙</button>
-      </header>
+      <SiteNav onNavigate={onNavigate} activePath="/friends" />
 
       <section className="friends-hero">
         <p className="eyebrow">Friends</p>
@@ -55,10 +50,18 @@ function FriendDetail({ friendID, onNavigate }: { friendID: string; onNavigate: 
     fetchJSON<PublicFriendDetail>(`/api/public/friends/${friendID}`).then(setFriend).catch(showFriendsError);
   }, [friendID]);
 
-  if (!friend) return <main className="page friends-page"><p className="muted">正在打开朋友资料...</p></main>;
+  if (!friend) {
+    return (
+      <main className="page friends-page">
+        <SiteNav onNavigate={onNavigate} activePath="/friends" />
+        <p className="muted">正在打开朋友资料...</p>
+      </main>
+    );
+  }
 
   return (
     <main className="page friends-page">
+      <SiteNav onNavigate={onNavigate} activePath="/friends" />
       <button type="button" className="ghost-button" onClick={() => onNavigate("/friends")}>返回朋友列表</button>
       <section className="friend-detail glass-panel">
         <FriendPhoto friend={friend} />

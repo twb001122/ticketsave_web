@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchJSON } from "./api";
+import { SiteNav } from "./site-nav";
 import { formatLabels, roleLabels, typeLabels, type PublicCalendarEventSummary } from "../shared/domain";
 
 type ViewMode = "month" | "list";
@@ -49,15 +50,7 @@ export function CalendarPage({
 
   return (
     <main className="page calendar-page">
-      <header className="topbar glass-nav">
-        <button type="button" className="brand-lockup" onClick={() => onNavigate("/")}>
-          <img src="/app-icon.png" alt="XYSG" />
-          <span>演出日历</span>
-        </button>
-        <button type="button" className="ghost-button glass-button" onClick={() => onNavigate("/tickets")}>
-          去票根墙
-        </button>
-      </header>
+      <SiteNav onNavigate={onNavigate} activePath="/calendar" />
 
       <section className="calendar-hero">
         <p className="eyebrow">Live Calendar</p>

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { fetchJSON } from "./api";
+import { SiteNav } from "./site-nav";
 import type { GuestbookPageResult, PublicGuestbookMessage } from "../shared/domain";
 
 const pageSize = 8;
@@ -40,15 +41,7 @@ export function GuestbookPage({ onNavigate }: { onNavigate: (path: string) => vo
 
   return (
     <main className="page guestbook-page">
-      <header className="topbar glass-nav">
-        <button type="button" className="brand-lockup" onClick={() => onNavigate("/")}>
-          <img src="/app-icon.png" alt="XYSG" />
-          <span>留言板</span>
-        </button>
-        <button type="button" className="ghost-button glass-button" onClick={() => onNavigate("/tickets")}>
-          去票根墙
-        </button>
-      </header>
+      <SiteNav onNavigate={onNavigate} activePath="/guestbook" />
 
       <section className="guestbook-hero">
         <p className="eyebrow">Guestbook</p>

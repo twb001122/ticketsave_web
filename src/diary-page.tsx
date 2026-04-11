@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { fetchJSON } from "./api";
+import { SiteNav } from "./site-nav";
 import type { DiaryPageResult, PublicDiaryComment, PublicDiaryPostDetail, PublicDiaryPostSummary } from "../shared/domain";
 
 const pageSize = 6;
@@ -31,15 +32,7 @@ function DiaryList({ onNavigate }: { onNavigate: (path: string) => void }) {
 
   return (
     <main className="page diary-page">
-      <header className="topbar glass-nav">
-        <button type="button" className="brand-lockup" onClick={() => onNavigate("/")}>
-          <img src="/app-icon.png" alt="XYSG" />
-          <span>喜剧日记</span>
-        </button>
-        <button type="button" className="ghost-button glass-button" onClick={() => onNavigate("/guestbook")}>
-          去留言板
-        </button>
-      </header>
+      <SiteNav onNavigate={onNavigate} activePath="/diary" />
 
       <section className="diary-hero">
         <p className="eyebrow">Comedy Diary</p>
@@ -95,10 +88,18 @@ function DiaryDetail({ postID, onNavigate }: { postID: string; onNavigate: (path
     setForm({ nickname: "", content: "" });
   }
 
-  if (!post) return <main className="page diary-page"><p className="muted">正在翻开日记...</p></main>;
+  if (!post) {
+    return (
+      <main className="page diary-page">
+        <SiteNav onNavigate={onNavigate} activePath="/diary" />
+        <p className="muted">正在翻开日记...</p>
+      </main>
+    );
+  }
 
   return (
     <main className="page diary-page">
+      <SiteNav onNavigate={onNavigate} activePath="/diary" />
       <button type="button" className="ghost-button" onClick={() => onNavigate("/diary")}>返回日记列表</button>
       <article className="diary-detail glass-panel">
         <p className="eyebrow">{formatDiaryDate(post.publishedAt)}</p>

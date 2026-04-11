@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HomePage } from "../src/home-page";
 
@@ -16,16 +16,34 @@ describe("HomePage", () => {
 
     render(<HomePage onNavigate={vi.fn()} />);
 
-    expect(screen.getByRole("heading", { name: /脱口秀演员马达/i })).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: /首页/i }).length).toBeGreaterThan(0);
-    expect(screen.getAllByRole("button", { name: /后台管理/i }).length).toBeGreaterThan(0);
+    const heroTitle = screen.getByRole("heading", { name: "马达的 喜剧路口" });
+    expect(within(heroTitle).getByText("马达的")).toBeTruthy();
+    expect(within(heroTitle).getByText("喜剧路口")).toBeTruthy();
+    expect(screen.getByText("DongSi Brings People Together")).toBeTruthy();
+    expect(screen.getByText("这里会记录一下马达的演出、他的日记、他的观众、他的朋友、他的喜剧、他的夏天和他的东四。")).toBeTruthy();
+    expect(document.body.textContent).not.toContain("他的日、");
+    expect(screen.getByLabelText("今日入口卡片")).toBeTruthy();
+    expect(screen.getByText("TODAY'S ENTRY")).toBeTruthy();
+    expect(screen.getByText("胡同里的笑声")).toBeTruthy();
+    expect(screen.getByAltText("东四路口的夜色")).toBeTruthy();
+    expect(screen.getByText("“东四的夏夜，蝉鸣和笑声一样响亮。”")).toBeTruthy();
+    expect(screen.getByText("Read 4 min ago")).toBeTruthy();
+    expect(screen.getByText("June 15 · Dongsi Road")).toBeTruthy();
+    expect(screen.queryByText("VIEW RECENT ACTIVITY")).toBeNull();
+    expect(screen.getAllByAltText(/读者头像/)).toHaveLength(4);
+    expect(screen.getByRole("button", { name: /马达的喜剧路口/i })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "看最近演出" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "进入票根档案" })).toBeNull();
+    const nav = screen.getByRole("navigation", { name: "全站导航" });
+    expect(within(nav).getByRole("button", { name: "首页" }).getAttribute("aria-current")).toBe("page");
+    expect(nav.textContent).toContain("后台管理");
 
     await waitFor(() => expect(screen.getByText("周六开放麦")).toBeTruthy());
     expect(screen.getAllByText("春天票根").length).toBeGreaterThan(0);
     expect(screen.getAllByText("写在开场之后").length).toBeGreaterThan(0);
     expect(screen.getAllByText("小李").length).toBeGreaterThan(0);
     expect(screen.getByText("这一场太好笑了")).toBeTruthy();
-    expect(screen.getByLabelText("播放中的最近动态")).toBeTruthy();
+    expect(screen.getByLabelText("最近发生输入动画")).toBeTruthy();
     expect(screen.getAllByTestId("home-calendar-card")).toHaveLength(5);
 
     const headings = screen.getAllByRole("heading").map((heading) => heading.textContent ?? "");
