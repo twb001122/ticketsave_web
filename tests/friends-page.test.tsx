@@ -26,7 +26,7 @@ describe("FriendsPage", () => {
               stageName: "明仔",
               bio: "很会接梗的朋友。",
               quote: "台上见。",
-              photoUrl: "/covers/friend.jpg",
+              photoUrl: "friend.jpg",
               relationship: { sameShowCount: 2, firstSharedShowDate: "2023-01-01T20:00:00.000" }
             }]
           })
@@ -41,7 +41,7 @@ describe("FriendsPage", () => {
 
     await waitFor(() => expect(screen.getByText("小明")).toBeTruthy());
     expect(screen.getByText("同台 2 场")).toBeTruthy();
-    await user.click(screen.getByRole("button", { name: "看小明" }));
+    await user.click(screen.getByRole("button", { name: /小明/ }));
 
     expect(onNavigate).toHaveBeenCalledWith("/friends/friend-1");
   });
@@ -59,8 +59,8 @@ describe("FriendsPage", () => {
             stageName: "明仔",
             bio: "很会接梗的朋友。",
             quote: "台上见。",
-            photoUrl: "/covers/friend.jpg",
-            galleryUrls: ["/covers/one.jpg", "/covers/two.jpg"],
+            photoUrl: "friend.jpg",
+            galleryUrls: ["one.jpg", "two.jpg"],
             relationship: {
               sameShowCount: 2,
               firstSharedShowDate: "2023-01-01T20:00:00.000",

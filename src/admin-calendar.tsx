@@ -59,6 +59,7 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
   const emptyForm = useMemo(() => toForm(null, brands, venues), [brands, venues]);
   const [events, setEvents] = useState<CalendarEventRecord[]>([]);
   const [editing, setEditing] = useState<CalendarEventRecord | null>(null);
+  const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<CalendarEventForm>(emptyForm);
   const [importText, setImportText] = useState("");
   const [importResult, setImportResult] = useState("");
@@ -76,6 +77,18 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
     setEvents(data.items);
   }
 
+  function startEdit(event: CalendarEventRecord | null) {
+    setEditing(event);
+    setForm(toForm(event, brands, venues));
+    setShowModal(true);
+  }
+
+  function closeModal() {
+    setEditing(null);
+    setForm(emptyForm);
+    setShowModal(false);
+  }
+
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const url = editing ? `/api/admin/calendar/${editing.id}` : "/api/admin/calendar";
@@ -85,8 +98,7 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
       body: JSON.stringify(form)
     });
     if (!response.ok) return alert((await response.json()).error ?? "保存失败");
-    setEditing(null);
-    setForm(emptyForm);
+    closeModal();
     await refresh();
     onChanged();
   }
@@ -100,6 +112,7 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
     const body = await response.json();
     if (!response.ok) return alert(body.error ?? "导入失败");
     setImportResult(`导入 ${body.importedCount} 条，跳过 ${body.skippedCount} 条，新建厂牌 ${body.createdBrands.length} 个，新建场地 ${body.createdVenues.length} 个。`);
+    setImportText("");
     await refresh();
     onChanged();
   }
@@ -111,47 +124,67 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
     onChanged();
   }
 
-  return (
-    <section className="admin-grid calendar-admin">
-      <form className="editor-panel" onSubmit={save}>
-        <h2>{editing ? "编辑日历事件" : "新增日历事件"}</h2>
-        <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="演出标题" />
-        <input type="date" value={form.eventDate} onChange={(event) => setForm({ ...form, eventDate: event.target.value })} />
-        <input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} />
-        <select value={form.brandID} onChange={(event) => setForm({ ...form, brandID: event.target.value })}>
-          <option value="">选择厂牌</option>
-          {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.displayName}</option>)}
-        </select>
-        <select value={form.venueID} onChange={(event) => setForm({ ...form, venueID: event.target.value })}>
-          <option value="">选择场地</option>
-          {venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.displayName}</option>)}
-        </select>
-        <div className="three-cols">
-          <EnumSelect value={form.format} values={showFormats} labels={formatLabels} onChange={(format) => setForm({ ...form, format })} />
-          <EnumSelect value={form.myRole} values={showRoles} labels={roleLabels} onChange={(myRole) => setForm({ ...form, myRole })} />
-          <EnumSelect value={form.showType} values={showTypes} labels={typeLabels} onChange={(showType) => setForm({ ...form, showType })} />
-        </div>
-        <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="备注" />
-        <button className="primary-button">{editing ? "保存日历事件" : "新增日历事件"}</button>
-      </form>
+  async function deleteEvent(eventID: string) {
+    if (!confirm("确定删除此日历事件吗？")) return;
+    const response = await fetch(`/api/admin/calendar/${eventID}`, { method: "DELETE" });
+    if (!response.ok) return alert((await response.json()).error ?? "删除失败");
+    await refresh();
+    onChanged();
+  }
 
-      <section className="table-panel">
+  return (
+    <section className="calendar-admin">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2>日历事件</h2>
+        <button type="button" className="primary-button" onClick={() => startEdit(null)}>新增日历事件</button>
+      </div>
+      <div style={{ display: "grid", gap: "10px" }}>
         <a className="primary-button as-link" href="/api/admin/calendar/import-template">下载 JSON 示例</a>
         <textarea value={importText} onChange={(event) => setImportText(event.target.value)} placeholder="粘贴 JSON 数组后导入" />
         <button className="ghost-button" onClick={importJSON} type="button">导入 JSON</button>
         {importResult ? <p className="muted">{importResult}</p> : null}
-        {events.map((item) => (
-          <div className="admin-row" key={item.id}>
-            <div>
-              <strong>{item.title}</strong>
-              <span>{item.eventDate} {item.startTime} · {formatLabels[item.format]} · {roleLabels[item.myRole]} · {typeLabels[item.showType]}</span>
-            </div>
-            <button type="button" onClick={() => { setEditing(item); setForm(toForm(item, brands, venues)); }}>编辑</button>
-            <button type="button" onClick={() => createShow(item.id)} disabled={Boolean(item.createdShowID)}>{item.createdShowID ? "已生成" : "生成票根"}</button>
+      </div>
+      {events.map((item) => (
+        <div className="admin-row" key={item.id}>
+          <div>
+            <strong>{item.title}</strong>
+            <span>{item.eventDate} {item.startTime} · {formatLabels[item.format]} · {roleLabels[item.myRole]} · {typeLabels[item.showType]}</span>
           </div>
-        ))}
-      </section>
+          <button type="button" onClick={() => startEdit(item)}>编辑</button>
+          <button type="button" onClick={() => createShow(item.id)} disabled={Boolean(item.createdShowID)}>{item.createdShowID ? "已生成" : "生成票根"}</button>
+        </div>
+      ))}
+      {showModal ? (
+        <div className="admin-modal-backdrop" onClick={closeModal}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2>{editing ? "编辑日历事件" : "新增日历事件"}</h2>
+              <button type="button" className="admin-modal-close" onClick={closeModal}>×</button>
+            </div>
+            <form style={{ display: "grid", gap: "12px" }} onSubmit={save}>
+              <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="演出标题" />
+              <input type="date" value={form.eventDate} onChange={(event) => setForm({ ...form, eventDate: event.target.value })} />
+              <input type="time" value={form.startTime} onChange={(event) => setForm({ ...form, startTime: event.target.value })} />
+              <select value={form.brandID} onChange={(event) => setForm({ ...form, brandID: event.target.value })}>
+                <option value="">选择厂牌</option>
+                {brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.displayName}</option>)}
+              </select>
+              <select value={form.venueID} onChange={(event) => setForm({ ...form, venueID: event.target.value })}>
+                <option value="">选择场地</option>
+                {venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.displayName}</option>)}
+              </select>
+              <div className="three-cols">
+                <EnumSelect value={form.format} values={showFormats} labels={formatLabels} onChange={(format) => setForm({ ...form, format })} />
+                <EnumSelect value={form.myRole} values={showRoles} labels={roleLabels} onChange={(myRole) => setForm({ ...form, myRole })} />
+                <EnumSelect value={form.showType} values={showTypes} labels={typeLabels} onChange={(showType) => setForm({ ...form, showType })} />
+              </div>
+              <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="备注" />
+              <button className="primary-button" type="submit">{editing ? "保存日历事件" : "新增日历事件"}</button>
+              {editing ? <button type="button" className="danger" onClick={() => { deleteEvent(editing.id); closeModal(); }}>删除此事件</button> : null}
+            </form>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

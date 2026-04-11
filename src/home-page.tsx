@@ -341,7 +341,7 @@ function TicketCover({ show }: { show: Pick<PublicShowSummary, "coverFileName" |
 
 function FriendPhoto({ friend }: { friend: Pick<PublicFriendSummary, "displayName" | "photoUrl"> }) {
   if (friend.photoUrl) {
-    return <img className="home-friend-photo" src={friend.photoUrl} alt={friend.displayName} />;
+    return <img className="home-friend-photo" src={`/covers/${encodeURIComponent(friend.photoUrl)}`} alt={friend.displayName} />;
   }
   return <div className="home-friend-photo home-friend-placeholder"><span>{friend.displayName.slice(0, 2)}</span></div>;
 }

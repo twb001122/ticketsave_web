@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchJSON } from "./api";
 import { SiteNav } from "./site-nav";
-import { formatLabels, roleLabels, typeLabels, type PublicCalendarEventSummary } from "../shared/domain";
+import { formatLabels, roleLabels, showTypes, typeLabels, type PublicCalendarEventSummary, type ShowType } from "../shared/domain";
 
 type ViewMode = "month" | "list";
 
@@ -53,44 +53,56 @@ export function CalendarPage({
       <SiteNav onNavigate={onNavigate} activePath="/calendar" />
 
       <section className="calendar-hero">
-        <p className="eyebrow">Live Calendar</p>
-        <h1>这个月，马达会出现在哪些现场。</h1>
-      </section>
-
-      <section className="calendar-toolbar" aria-label="切换月份和视图">
-        <button type="button" className="chip" onClick={() => changeMonth(-1)}>
-          上个月
-        </button>
-        <strong>{formatMonthLabel(month)}</strong>
-        <button type="button" className="chip" onClick={() => changeMonth(1)}>
-          下个月
-        </button>
-        <button type="button" className={mode === "month" ? "chip active" : "chip"} onClick={() => setMode("month")}>
-          月历
-        </button>
-        <button type="button" className={mode === "list" ? "chip active" : "chip"} onClick={() => setMode("list")}>
-          列表
-        </button>
+        <div className="calendar-hero-text">
+          <p className="eyebrow">Live Calendar</p>
+          <h1>这个月，马达会出现在哪些现场。</h1>
+          <p className="hero-copy">追踪每场演出的时间、地点和阵容，不错过每一次笑声。</p>
+        </div>
+        <div className="calendar-hero-actions">
+          <button type="button" className="chip" onClick={() => changeMonth(-1)}>
+            ← 上个月
+          </button>
+          <strong className="calendar-month-label">{formatMonthLabel(month)}</strong>
+          <button type="button" className="chip" onClick={() => changeMonth(1)}>
+          下个月 →
+          </button>
+          <div className="calendar-view-toggle">
+            <button type="button" className={mode === "month" ? "chip active" : "chip"} onClick={() => setMode("month")}>
+              月历
+            </button>
+            <button type="button" className={mode === "list" ? "chip active" : "chip"} onClick={() => setMode("list")}>
+              列表
+            </button>
+          </div>
+        </div>
       </section>
 
       {mode === "month" ? (
-        <section className="calendar-shell glass-panel">
+        <section className="calendar-shell home-glass">
           <div className="calendar-grid" aria-label={`${formatMonthLabel(month)}月历`}>
             {["一", "二", "三", "四", "五", "六", "日"].map((day) => (
-              <strong key={day}>{day}</strong>
+              <span className="calendar-weekday" key={day}>{day}</span>
             ))}
             {days.map((day, index) => {
               const dateEvents = day ? eventsByDate.get(day) ?? [] : [];
+              const isSelected = day === selectedDate;
+              const uniqueTypes = [...new Set(dateEvents.map((e) => e.showType))];
+              const eventCount = dateEvents.length;
               return (
                 <button
                   key={day ?? `blank-${index}`}
                   type="button"
-                  className="calendar-day"
+                  className={`calendar-day${isSelected ? " is-selected" : ""}${eventCount > 0 ? " has-events" : ""}`}
                   onClick={() => day && setSelectedDate(day)}
                   disabled={!day}
                 >
-                  {day ? <span>{Number(day.slice(-2))}</span> : null}
-                  {dateEvents.length > 0 ? <em>{dateEvents.length} 场</em> : null}
+                  {day ? <span className="calendar-day-number">{Number(day.slice(-2))}</span> : null}
+                  {eventCount > 0 ? <span className="calendar-day-count">{eventCount}</span> : null}
+                  {uniqueTypes.length > 0 ? (
+                    <span className="calendar-dots">
+                      {uniqueTypes.map((t) => <em key={t} className={`calendar-dot dot-${t}`} title={typeLabels[t]} />)}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
@@ -103,7 +115,7 @@ export function CalendarPage({
           </div>
         </section>
       ) : (
-        <section className="calendar-list glass-panel">
+        <section className="calendar-list home-glass">
           <h2>{formatMonthLabel(month)}演出列表</h2>
           {events.map((event) => (
             <CalendarEventCard key={event.id} event={event} />
@@ -116,7 +128,7 @@ export function CalendarPage({
 
 function CalendarEventCard({ event }: { event: PublicCalendarEventSummary }) {
   return (
-    <article className="calendar-event-card">
+    <article className={`calendar-event-card card-type-${event.showType}`}>
       <p className="eyebrow">
         {event.eventDate} {event.startTime}
       </p>

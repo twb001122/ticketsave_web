@@ -58,7 +58,8 @@ export async function createServerApp(options: ServerAppOptions) {
     res.json({
       items: options.store.listPublicShows({
         format: typeof req.query.format === "string" ? req.query.format : undefined,
-        brandID: typeof req.query.brandID === "string" ? req.query.brandID : undefined
+        brandID: typeof req.query.brandID === "string" ? req.query.brandID : undefined,
+        showType: typeof req.query.showType === "string" ? req.query.showType : undefined
       })
     });
   });
@@ -316,17 +317,31 @@ export async function createServerApp(options: ServerAppOptions) {
     res.json({ items: options.store.listFriends() });
   });
 
-  app.post("/api/admin/friends", requireAdmin, (req, res, next) => {
+  app.post("/api/admin/friends", requireAdmin, upload.fields([{ name: "photo", maxCount: 1 }, { name: "gallery", maxCount: 5 }]), async (req, res, next) => {
     try {
-      res.status(201).json(options.store.createFriend(parseFriendBody(req.body)));
+      const input = parseFriendBody(req.body);
+      if (req.files) {
+        const files = req.files as { photo?: Express.Multer.File[]; gallery?: Express.Multer.File[] };
+        if (files.photo?.[0]) input.photoUrl = await saveUploadedCover(options.store, files.photo[0]);
+        if (files.gallery?.length) input.galleryUrls = await Promise.all(files.gallery.map((f) => saveUploadedCover(options.store, f)));
+      }
+      res.status(201).json(options.store.createFriend(input));
     } catch (error) {
       next(error);
     }
   });
 
-  app.put("/api/admin/friends/:id", requireAdmin, (req, res, next) => {
+  app.put("/api/admin/friends/:id", requireAdmin, upload.fields([{ name: "photo", maxCount: 1 }, { name: "gallery", maxCount: 5 }]), async (req, res, next) => {
     try {
-      res.json(options.store.updateFriend(String(req.params.id), parseFriendBody(req.body)));
+      const input = parseFriendBody(req.body);
+      if (req.files) {
+        const files = req.files as { photo?: Express.Multer.File[]; gallery?: Express.Multer.File[] };
+        if (files.photo?.[0]) input.photoUrl = await saveUploadedCover(options.store, files.photo[0]);
+        if (files.gallery?.length) input.galleryUrls = await Promise.all(files.gallery.map((f) => saveUploadedCover(options.store, f)));
+      }
+      if (input.photoUrl === null) delete (input as Partial<typeof input>).photoUrl;
+      if (input.galleryUrls.length === 0) delete (input as Partial<typeof input>).galleryUrls;
+      res.json(options.store.updateFriend(String(req.params.id), input));
     } catch (error) {
       next(error);
     }
@@ -460,8 +475,8 @@ function parseFriendBody(body: Record<string, unknown>) {
     performerID: typeof body.performerID === "string" ? body.performerID : undefined,
     bio: typeof body.bio === "string" ? body.bio : undefined,
     quote: typeof body.quote === "string" ? body.quote : undefined,
-    photoUrl: typeof body.photoUrl === "string" ? body.photoUrl : null,
-    galleryUrls: Array.isArray(body.galleryUrls) ? body.galleryUrls.map(String) : []
+    photoUrl: null as string | null,
+    galleryUrls: [] as string[]
   };
 }
 

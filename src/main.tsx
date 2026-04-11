@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { fetchJSON } from "./api";
+import { compressImage } from "./image-compress";
 import { CalendarPage } from "./calendar-page";
 import { ComingSoonPage } from "./coming-soon";
 import { PerformerPicker } from "./performer-picker";
@@ -89,7 +90,7 @@ export function App() {
 function ArchiveWall() {
   const [summary, setSummary] = useState<ArchiveSummary | null>(null);
   const [shows, setShows] = useState<PublicShowSummary[]>([]);
-  const [format, setFormat] = useState<string>("");
+  const [showType, setShowType] = useState<string>("");
   const [brandID, setBrandID] = useState<string>("");
   const [loading, setLoading] = useState(true);
 
@@ -99,23 +100,24 @@ function ArchiveWall() {
 
   useEffect(() => {
     const params = new URLSearchParams();
-    if (format) params.set("format", format);
+    if (showType) params.set("showType", showType);
     if (brandID) params.set("brandID", brandID);
     setLoading(true);
     fetchJSON<{ items: PublicShowSummary[] }>(`/api/public/shows?${params}`)
       .then((data) => setShows(data.items))
       .catch(showError)
       .finally(() => setLoading(false));
-  }, [format, brandID]);
+  }, [showType, brandID]);
 
   return (
-    <main className="page">
+    <main className="page tickets-page">
       <SiteNav onNavigate={navigate} activePath="/tickets" />
 
       <section className="archive-intro">
         <div>
           <p className="eyebrow">Performance Tickets</p>
           <h1>把每一次上台，留成一张可以回看的票。</h1>
+          <p className="hero-copy">每张票根都是一次上台的证据，按时间和厂牌慢慢翻。</p>
         </div>
         <div className="stats-strip">
           <Stat label="总场次" value={summary?.totalShows ?? 0} />
@@ -124,11 +126,11 @@ function ArchiveWall() {
         </div>
       </section>
 
-      <section className="filters" aria-label="筛选演出">
-        <button className={!format ? "chip active" : "chip"} onClick={() => setFormat("")}>全部形式</button>
-        {showFormats.map((item) => (
-          <button key={item} className={format === item ? "chip active" : "chip"} onClick={() => setFormat(item)}>
-            {formatLabels[item]} {summary?.formatCounts[item] ? `· ${summary.formatCounts[item]}` : ""}
+      <section className="filters" aria-label="筛选类型">
+        <button className={!showType ? "chip active" : "chip"} onClick={() => setShowType("")}>全部类型</button>
+        {showTypes.map((item) => (
+          <button key={item} className={showType === item ? "chip active" : "chip"} onClick={() => setShowType(item)}>
+            {typeLabels[item]} {summary?.typeCounts[item] ? `· ${summary.typeCounts[item]}` : ""}
           </button>
         ))}
       </section>
@@ -220,8 +222,8 @@ function ShowDetail({ id }: { id: string }) {
   return (
     <main className="page detail-page">
       <SiteNav onNavigate={navigate} activePath="/tickets" />
-      <button className="ghost-button" onClick={() => navigate("/tickets")}>返回票根墙</button>
-      <section className="detail-layout">
+      <button type="button" className="ghost-button" onClick={() => navigate("/tickets")}>返回票根墙</button>
+      <section className="detail-layout home-glass">
         <CoverImage show={show} />
         <div className="detail-main">
           <p className="eyebrow">{show.brand?.displayName ?? "个人档案"}</p>
@@ -319,6 +321,7 @@ function AdminApp() {
 
 function ShowAdmin({ snapshot, onChanged }: { snapshot: Snapshot; onChanged: () => void }) {
   const [editing, setEditing] = useState<ShowRecord | null>(null);
+  const [showModal, setShowModal] = useState(false);
   const emptyForm = useMemo(() => showToForm(null), []);
   const [form, setForm] = useState(emptyForm);
   const [cover, setCover] = useState<File | null>(null);
@@ -327,18 +330,26 @@ function ShowAdmin({ snapshot, onChanged }: { snapshot: Snapshot; onChanged: () 
     setEditing(show);
     setCover(null);
     setForm(showToForm(show));
+    setShowModal(true);
+  }
+
+  function closeModal() {
+    setEditing(null);
+    setCover(null);
+    setForm(emptyForm);
+    setShowModal(false);
   }
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
     const data = new FormData();
     for (const [key, value] of Object.entries(form)) data.set(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
-    if (cover) data.set("cover", cover);
+    if (cover) data.set("cover", await compressImage(cover), "cover.jpg");
     const url = editing ? `/api/admin/shows/${editing.id}` : "/api/admin/shows";
     const method = editing ? "PUT" : "POST";
     const response = await fetch(url, { method, body: data });
     if (!response.ok) return alert((await response.json()).error ?? "保存失败");
-    startEdit(null);
+    closeModal();
     onChanged();
   }
 
@@ -361,50 +372,59 @@ function ShowAdmin({ snapshot, onChanged }: { snapshot: Snapshot; onChanged: () 
   }
 
   return (
-    <section className="admin-grid">
-      <form className="editor-panel" onSubmit={save}>
-        <h2>{editing ? "编辑演出" : "新增演出"}</h2>
-        <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="演出标题" />
-        <input type="datetime-local" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
-        <select value={form.brandID} onChange={(event) => setForm({ ...form, brandID: event.target.value })}>
-          <option value="">未选择厂牌</option>
-          {snapshot.brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.displayName}</option>)}
-        </select>
-        <select value={form.venueID} onChange={(event) => setForm({ ...form, venueID: event.target.value })}>
-          <option value="">未选择场地</option>
-          {snapshot.venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.displayName}</option>)}
-        </select>
-        <PerformerPicker
-          label="演员阵容"
-          values={form.performerIDs}
-          options={snapshot.performers.map((item) => ({ id: item.id, label: item.displayName, subtitle: item.stageName }))}
-          onChange={(performerIDs) => setForm({ ...form, performerIDs })}
-          onCreate={createPerformer}
-        />
-        <div className="three-cols">
-          <EnumSelect value={form.format} values={showFormats} labels={formatLabels} onChange={(format) => setForm({ ...form, format })} />
-          <EnumSelect value={form.myRole} values={showRoles} labels={roleLabels} onChange={(myRole) => setForm({ ...form, myRole })} />
-          <EnumSelect value={form.showType} values={showTypes} labels={typeLabels} onChange={(showType) => setForm({ ...form, showType })} />
-        </div>
-        <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="备注" />
-        <label className="check-line"><input type="checkbox" checked={form.notesPublic} onChange={(event) => setForm({ ...form, notesPublic: event.target.checked })} /> 公开展示备注</label>
-        <input type="file" accept="image/*" onChange={(event) => setCover(event.target.files?.[0] ?? null)} />
-        <button className="primary-button">{editing ? "保存修改" : "新增演出"}</button>
-      </form>
-
-      <section className="table-panel">
+    <section>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2>演出列表</h2>
-        {snapshot.shows.map((show) => (
-          <div className="admin-row" key={show.id}>
-            <div>
-              <strong>{show.title}</strong>
-              <span>{show.date ? formatFullDate(show.date) : "待定时间"} · {formatLabels[show.format]}</span>
-            </div>
-            <button onClick={() => startEdit(show)}>编辑</button>
-            <button className="danger" onClick={() => deleteItem(`/api/admin/shows/${show.id}`, onChanged)}>删除</button>
+        <button type="button" className="primary-button" onClick={() => startEdit(null)}>新增演出</button>
+      </div>
+      {snapshot.shows.map((show) => (
+        <div className="admin-row" key={show.id}>
+          <div>
+            <strong>{show.title}</strong>
+            <span>{show.date ? formatFullDate(show.date) : "待定时间"} · {formatLabels[show.format]}</span>
           </div>
-        ))}
-      </section>
+          <button onClick={() => startEdit(show)}>编辑</button>
+          <button className="danger" onClick={() => deleteItem(`/api/admin/shows/${show.id}`, onChanged)}>删除</button>
+        </div>
+      ))}
+      {showModal ? (
+        <div className="admin-modal-backdrop" onClick={closeModal}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2>{editing ? "编辑演出" : "新增演出"}</h2>
+              <button type="button" className="admin-modal-close" onClick={closeModal}>×</button>
+            </div>
+            <form style={{ display: "grid", gap: "12px" }} onSubmit={save}>
+              <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="演出标题" />
+              <input type="datetime-local" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} />
+              <select value={form.brandID} onChange={(event) => setForm({ ...form, brandID: event.target.value })}>
+                <option value="">未选择厂牌</option>
+                {snapshot.brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.displayName}</option>)}
+              </select>
+              <select value={form.venueID} onChange={(event) => setForm({ ...form, venueID: event.target.value })}>
+                <option value="">未选择场地</option>
+                {snapshot.venues.map((venue) => <option key={venue.id} value={venue.id}>{venue.displayName}</option>)}
+              </select>
+              <PerformerPicker
+                label="演员阵容"
+                values={form.performerIDs}
+                options={snapshot.performers.map((item) => ({ id: item.id, label: item.displayName, subtitle: item.stageName }))}
+                onChange={(performerIDs) => setForm({ ...form, performerIDs })}
+                onCreate={createPerformer}
+              />
+              <div className="three-cols">
+                <EnumSelect value={form.format} values={showFormats} labels={formatLabels} onChange={(format) => setForm({ ...form, format })} />
+                <EnumSelect value={form.myRole} values={showRoles} labels={roleLabels} onChange={(myRole) => setForm({ ...form, myRole })} />
+                <EnumSelect value={form.showType} values={showTypes} labels={typeLabels} onChange={(showType) => setForm({ ...form, showType })} />
+              </div>
+              <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="备注" />
+              <label className="check-line"><input type="checkbox" checked={form.notesPublic} onChange={(event) => setForm({ ...form, notesPublic: event.target.checked })} /> 公开展示备注</label>
+              <input type="file" accept="image/*" onChange={(event) => setCover(event.target.files?.[0] ?? null)} />
+              <button className="primary-button" type="submit">{editing ? "保存修改" : "新增演出"}</button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -412,29 +432,41 @@ function ShowAdmin({ snapshot, onChanged }: { snapshot: Snapshot; onChanged: () 
 function EntityAdmin({ snapshot, onChanged }: { snapshot: Snapshot; onChanged: () => void }) {
   return (
     <section className="entity-columns">
-      <CatalogPanel title="演员" endpoint="/api/admin/performers" items={snapshot.performers} fields={["displayName", "stageName"]} relationLabel="关联厂牌" relationKey="brandIDs" relationOptions={snapshot.brands.map((item) => ({ id: item.id, label: item.displayName }))} onChanged={onChanged} />
-      <CatalogPanel title="厂牌" endpoint="/api/admin/brands" items={snapshot.brands} fields={["displayName", "cityName"]} relationLabel="关联场地" relationKey="venueIDs" relationOptions={snapshot.venues.map((item) => ({ id: item.id, label: item.displayName }))} onChanged={onChanged} />
-      <CatalogPanel title="场地" endpoint="/api/admin/venues" items={snapshot.venues} fields={["displayName", "cityName", "district", "addressLine"]} relationLabel="关联演员" relationKey="performerIDs" relationOptions={snapshot.performers.map((item) => ({ id: item.id, label: item.displayName }))} onChanged={onChanged} />
+      <CatalogPanel title="演员" endpoint="/api/admin/performers" items={snapshot.performers} fields={["displayName", "stageName"]} relations={[{ key: "brandIDs", label: "关联厂牌", options: snapshot.brands.map((item) => ({ id: item.id, label: item.displayName })) }]} onChanged={onChanged} />
+      <CatalogPanel title="厂牌" endpoint="/api/admin/brands" items={snapshot.brands} fields={["displayName", "cityName"]} relations={[{ key: "performerIDs", label: "关联演员", options: snapshot.performers.map((item) => ({ id: item.id, label: item.displayName })) }, { key: "venueIDs", label: "关联场地", options: snapshot.venues.map((item) => ({ id: item.id, label: item.displayName })) }]} onChanged={onChanged} />
+      <CatalogPanel title="场地" endpoint="/api/admin/venues" items={snapshot.venues} fields={["displayName", "cityName", "district", "addressLine"]} relations={[{ key: "brandIDs", label: "关联厂牌", options: snapshot.brands.map((item) => ({ id: item.id, label: item.displayName })) }]} onChanged={onChanged} />
     </section>
   );
 }
 
-function CatalogPanel({ title, endpoint, items, fields, relationKey, relationLabel, relationOptions, onChanged }: {
+function CatalogPanel({ title, endpoint, items, fields, relations, onChanged }: {
   title: string;
   endpoint: string;
   items: Array<Record<string, any>>;
   fields: string[];
-  relationKey: string;
-  relationLabel: string;
-  relationOptions: { id: string; label: string }[];
+  relations: { key: string; label: string; options: { id: string; label: string }[] }[];
   onChanged: () => void;
 }) {
+  const emptyForm = useMemo(() => {
+    const base: Record<string, any> = { displayName: "" };
+    for (const r of relations) base[r.key] = [];
+    return base;
+  }, [relations]);
+
   const [editing, setEditing] = useState<Record<string, any> | null>(null);
-  const [form, setForm] = useState<Record<string, any>>({ displayName: "", [relationKey]: [] });
+  const [showModal, setShowModal] = useState(false);
+  const [form, setForm] = useState<Record<string, any>>(emptyForm);
 
   function start(item: Record<string, any> | null) {
     setEditing(item);
-    setForm(item ? { ...item } : { displayName: "", [relationKey]: [] });
+    setForm(item ? { ...item } : { ...emptyForm });
+    setShowModal(true);
+  }
+
+  function closeModal() {
+    setEditing(null);
+    setForm({ ...emptyForm });
+    setShowModal(false);
   }
 
   async function save(event: React.FormEvent) {
@@ -446,20 +478,16 @@ function CatalogPanel({ title, endpoint, items, fields, relationKey, relationLab
       body: JSON.stringify(form)
     });
     if (!response.ok) return alert((await response.json()).error ?? "保存失败");
-    start(null);
+    closeModal();
     onChanged();
   }
 
   return (
     <section className="catalog-panel">
-      <form onSubmit={save}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2>{title}</h2>
-        {fields.map((field) => (
-          <input key={field} value={form[field] ?? ""} onChange={(event) => setForm({ ...form, [field]: event.target.value })} placeholder={fieldLabel(field)} />
-        ))}
-        <MultiSelect label={relationLabel} values={form[relationKey] ?? []} options={relationOptions} onChange={(values) => setForm({ ...form, [relationKey]: values })} />
-        <button className="primary-button">{editing ? "保存" : "新增"}</button>
-      </form>
+        <button type="button" className="primary-button" onClick={() => start(null)}>新增</button>
+      </div>
       {items.map((item) => (
         <div className="admin-row compact" key={item.id}>
           <div><strong>{item.displayName}</strong><span>{item.cityName ?? item.stageName ?? "实体"}</span></div>
@@ -467,6 +495,25 @@ function CatalogPanel({ title, endpoint, items, fields, relationKey, relationLab
           <button className="danger" onClick={() => deleteItem(`${endpoint}/${item.id}`, onChanged)}>删除</button>
         </div>
       ))}
+      {showModal ? (
+        <div className="admin-modal-backdrop" onClick={closeModal}>
+          <div className="admin-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="admin-modal-header">
+              <h2>{editing ? `编辑${title}` : `新增${title}`}</h2>
+              <button type="button" className="admin-modal-close" onClick={closeModal}>×</button>
+            </div>
+            <form style={{ display: "grid", gap: "12px" }} onSubmit={save}>
+              {fields.map((field) => (
+                <input key={field} value={form[field] ?? ""} onChange={(event) => setForm({ ...form, [field]: event.target.value })} placeholder={fieldLabel(field)} />
+              ))}
+              {relations.map((rel) => (
+                <MultiSelect key={rel.key} label={rel.label} values={form[rel.key] ?? []} options={rel.options} onChange={(values) => setForm({ ...form, [rel.key]: values })} />
+              ))}
+              <button className="primary-button" type="submit">{editing ? "保存" : "新增"}</button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -497,13 +544,30 @@ function BackupAdmin({ onChanged }: { onChanged: () => void }) {
 }
 
 function MultiSelect({ label, values, options, onChange }: { label: string; values: string[]; options: { id: string; label: string }[]; onChange: (values: string[]) => void }) {
+  const [query, setQuery] = useState("");
+  const selected = options.filter((o) => values.includes(o.id));
+  const available = options.filter((o) => !values.includes(o.id) && (!query || o.label.includes(query)));
+  function add(id: string) { onChange([...values, id]); }
+  function remove(id: string) { onChange(values.filter((v) => v !== id)); }
   return (
-    <label className="multi-select">
+    <div className="multi-select">
       <span>{label}</span>
-      <select multiple value={values} onChange={(event) => onChange(Array.from(event.currentTarget.selectedOptions).map((option) => option.value))}>
-        {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-      </select>
-    </label>
+      {selected.length > 0 ? (
+        <div className="chip-row selected-chips">
+          {selected.map((item) => (
+            <button type="button" key={item.id} className="ms-chip is-on" onClick={() => remove(item.id)}>{item.label} ×</button>
+          ))}
+        </div>
+      ) : null}
+      <input className="ms-search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`搜索${label}…`} />
+      {available.length > 0 ? (
+        <div className="chip-row available-chips">
+          {available.map((item) => (
+            <button type="button" key={item.id} className="ms-chip" onClick={() => add(item.id)}>{item.label}</button>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 

@@ -150,10 +150,11 @@ export class DataStore {
     };
   }
 
-  listPublicShows(filters: { format?: string; brandID?: string } = {}): PublicShowSummary[] {
+  listPublicShows(filters: { format?: string; brandID?: string; showType?: string } = {}): PublicShowSummary[] {
     return this.listShows()
       .filter((show) => show.status === "published")
       .filter((show) => !filters.format || show.format === filters.format)
+      .filter((show) => !filters.showType || show.showType === filters.showType)
       .filter((show) => !filters.brandID || show.brandID === filters.brandID)
       .sort(byDateDesc)
       .map((show) => this.toPublicShow(show, false));
@@ -1347,10 +1348,8 @@ export class DataStore {
     createdAt: string;
     updatedAt: string;
   }): CalendarEventRecord {
-    const eventDate = requireDate(input.eventDate);
-    const startTime = requireTime(input.startTime);
-    if (!input.brandID) throw new Error("日历事件厂牌不能为空。");
-    if (!input.venueID) throw new Error("日历事件场地不能为空。");
+    const eventDate = input.eventDate && /^\d{4}-\d{2}-\d{2}$/.test(input.eventDate) ? requireDate(input.eventDate) : (input.eventDate ?? "");
+    const startTime = input.startTime && /^\d{2}:\d{2}$/.test(input.startTime) ? requireTime(input.startTime) : (input.startTime ?? "");
     return {
       id: input.id,
       title: storedTitle(input.title ?? ""),
@@ -1691,30 +1690,17 @@ function parseCalendarRow(
   errors: CalendarImportResult["errors"];
 } {
   const errors: CalendarImportResult["errors"] = [];
-  const date = String(row.date ?? "").trim();
-  const startTime = String(row.startTime ?? "").trim();
-  const brand = String(row.brand ?? "").trim();
-  const venue = String(row.venue ?? "").trim();
+  let date = String(row.date ?? "").trim();
+  let startTime = String(row.startTime ?? "").trim();
+  const brand = String(row.brand ?? "").trim() || "未指定";
+  const venue = String(row.venue ?? "").trim() || "未指定";
   const city = asNullableString(row.city);
   const format = formatByLabel.get(String(row.format ?? "").trim());
   const myRole = roleByLabel.get(String(row.myRole ?? "").trim());
   const showType = typeByLabel.get(String(row.showType ?? "").trim());
 
-  try {
-    requireDate(date);
-  } catch (error) {
-    errors.push({ row: rowNumber, field: "date", message: (error as Error).message });
-  }
-  try {
-    requireTime(startTime);
-  } catch (error) {
-    errors.push({ row: rowNumber, field: "startTime", message: (error as Error).message });
-  }
-  if (!brand) errors.push({ row: rowNumber, field: "brand", message: "厂牌不能为空。" });
-  if (!venue) errors.push({ row: rowNumber, field: "venue", message: "场地不能为空。" });
-  if (!format) errors.push({ row: rowNumber, field: "format", message: "形式必须是单口、漫才、即兴、新喜剧或其他。" });
-  if (!myRole) errors.push({ row: rowNumber, field: "myRole", message: "角色必须是主持、演员、主咖、开场或其他。" });
-  if (!showType) errors.push({ row: rowNumber, field: "showType", message: "类型必须是开放麦、商演、主打秀、专场、比赛或其他。" });
+  try { requireDate(date); } catch { date = ""; }
+  try { requireTime(startTime); } catch { startTime = ""; }
 
   return {
     value: {

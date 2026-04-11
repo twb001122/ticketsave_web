@@ -22,21 +22,20 @@ function FriendList({ onNavigate }: { onNavigate: (path: string) => void }) {
       <section className="friends-hero">
         <p className="eyebrow">Friends</p>
         <h1>那些一起把夜晚讲亮的人。</h1>
+        <p className="hero-copy">同台过的演员、一起熬夜的朋友，和这条路上的伙伴。</p>
       </section>
 
       <section className="friends-grid" aria-label="朋友列表">
         {friends.length === 0 ? <p className="muted">还没有朋友资料。</p> : null}
         {friends.map((friend) => (
-          <article className="friend-card glass-panel" key={friend.id}>
+          <button type="button" className="friend-card home-glass" key={friend.id} onClick={() => onNavigate(`/friends/${friend.id}`)}>
             <FriendPhoto friend={friend} />
-            <div>
-              <p className="eyebrow">{friend.stageName ?? "Comedy Friend"}</p>
+            <div className="friend-card-info">
               <h2>{friend.displayName}</h2>
-              <p>{friend.bio}</p>
-              <span>同台 {friend.relationship.sameShowCount} 场</span>
-              <button type="button" className="ghost-button" onClick={() => onNavigate(`/friends/${friend.id}`)}>看{friend.displayName}</button>
+              {friend.quote ? <p className="friend-card-quote">「{friend.quote}」</p> : null}
+              <span className="friend-card-stat">同台 {friend.relationship.sameShowCount} 场</span>
             </div>
-          </article>
+          </button>
         ))}
       </section>
     </main>
@@ -52,7 +51,7 @@ function FriendDetail({ friendID, onNavigate }: { friendID: string; onNavigate: 
 
   if (!friend) {
     return (
-      <main className="page friends-page">
+      <main className="page friend-detail-page">
         <SiteNav onNavigate={onNavigate} activePath="/friends" />
         <p className="muted">正在打开朋友资料...</p>
       </main>
@@ -60,16 +59,18 @@ function FriendDetail({ friendID, onNavigate }: { friendID: string; onNavigate: 
   }
 
   return (
-    <main className="page friends-page">
+    <main className="page friend-detail-page">
       <SiteNav onNavigate={onNavigate} activePath="/friends" />
-      <button type="button" className="ghost-button" onClick={() => onNavigate("/friends")}>返回朋友列表</button>
-      <section className="friend-detail glass-panel">
-        <FriendPhoto friend={friend} />
-        <div>
+      <section className="friend-detail home-glass">
+        <div className="friend-detail-photo">
+          <FriendPhoto friend={friend} />
+        </div>
+        <div className="friend-detail-info">
+          <button type="button" className="back-link" onClick={() => onNavigate("/friends")}>← 朋友</button>
           <p className="eyebrow">{friend.stageName ?? "Comedy Friend"}</p>
           <h1>{friend.displayName}</h1>
-          <p>{friend.bio}</p>
-          {friend.quote ? <blockquote>{friend.quote}</blockquote> : null}
+          {friend.bio ? <p className="friend-bio">{friend.bio}</p> : null}
+          {friend.quote ? <blockquote className="friend-quote">{friend.quote}</blockquote> : null}
           <div className="relationship-panel">
             <strong>同台演出 {friend.relationship.sameShowCount} 场</strong>
             <span>{friend.relationship.firstSharedShowDate ? `第一次同台是 ${formatFriendDate(friend.relationship.firstSharedShowDate)}` : "还没有记录到同台演出"}</span>
@@ -79,21 +80,26 @@ function FriendDetail({ friendID, onNavigate }: { friendID: string; onNavigate: 
 
       {friend.galleryUrls.length > 0 ? (
         <section className="friend-gallery" aria-label="朋友相册">
-          {friend.galleryUrls.map((url, index) => (
-            <img key={url} src={url} alt={`${friend.displayName} 相册 ${index + 1}`} />
-          ))}
+          <h2>相册</h2>
+          <div className="gallery-grid">
+            {friend.galleryUrls.map((url, index) => (
+              <img key={url} src={`/covers/${encodeURIComponent(url)}`} alt={`${friend.displayName} 相册 ${index + 1}`} />
+            ))}
+          </div>
         </section>
       ) : null}
 
       {friend.relationship.sharedShows.length > 0 ? (
-        <section className="shared-shows glass-panel">
+        <section className="shared-shows-section" aria-label="共同演出">
           <h2>一起上过的台</h2>
-          {friend.relationship.sharedShows.map((show) => (
-            <article className="message-card" key={show.id}>
-              <p>{show.title}</p>
-              <span>{show.date ? formatFriendDate(show.date) : "时间待补充"}</span>
-            </article>
-          ))}
+          <div className="shared-shows-list">
+            {friend.relationship.sharedShows.map((show) => (
+              <article className="shared-show-card" key={show.id}>
+                <strong>{show.title}</strong>
+                <span>{show.date ? formatFriendDate(show.date) : "时间待补充"}</span>
+              </article>
+            ))}
+          </div>
         </section>
       ) : null}
     </main>
@@ -101,8 +107,9 @@ function FriendDetail({ friendID, onNavigate }: { friendID: string; onNavigate: 
 }
 
 function FriendPhoto({ friend }: { friend: Pick<PublicFriendSummary, "displayName" | "photoUrl"> }) {
-  return friend.photoUrl ? (
-    <img className="friend-photo" src={friend.photoUrl} alt={friend.displayName} />
+  const src = friend.photoUrl ? `/covers/${encodeURIComponent(friend.photoUrl)}` : null;
+  return src ? (
+    <img className="friend-photo" src={src} alt={friend.displayName} />
   ) : (
     <div className="friend-photo friend-photo-placeholder"><span>{friend.displayName}</span></div>
   );

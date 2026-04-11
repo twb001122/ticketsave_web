@@ -23,7 +23,7 @@ describe("site nav styles", () => {
     expect(styles).toContain("animation: homeAtmosphere");
     expect(styles).toContain("@keyframes homeAtmosphere");
     expect(styles).toContain(".home-title-accent");
-    expect(styles).toContain("background: linear-gradient(90deg, #ee8a38 0%, #d94732 100%);");
+    expect(styles).toContain("background: linear-gradient(90deg, #f0a048 0%, #ee8a38 48%, #d94732 100%);");
     expect(styles).toContain("-webkit-background-clip: text;");
     expect(styles).toContain(".home-hero-title {");
     expect(styles).toContain("margin-top: 18px;");

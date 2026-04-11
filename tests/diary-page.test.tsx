@@ -88,9 +88,9 @@ describe("DiaryPage", () => {
     render(<DiaryPage onNavigate={vi.fn()} postID="post-1" />);
 
     await waitFor(() => expect(screen.getByText("上台前很紧张，下台后觉得它还能再长一点。")).toBeTruthy());
-    await user.click(screen.getByRole("button", { name: "喜欢 2" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "喜欢 3" })).toBeTruthy());
-    await user.type(screen.getByPlaceholderText("昵称"), "小马");
+    await user.click(screen.getByRole("button", { name: / 2/ }));
+    await waitFor(() => expect(screen.getByRole("button", { name: / 3/ })).toBeTruthy());
+    await user.type(screen.getByPlaceholderText("你的昵称"), "小马");
     await user.type(screen.getByPlaceholderText("想说的话"), "继续写。");
     await user.click(screen.getByRole("button", { name: "留下评论" }));
 

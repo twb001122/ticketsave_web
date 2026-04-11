@@ -37,16 +37,17 @@ function DiaryList({ onNavigate }: { onNavigate: (path: string) => void }) {
       <section className="diary-hero">
         <p className="eyebrow">Comedy Diary</p>
         <h1>把上台前后那些没讲完的话，慢慢写下来。</h1>
+        <p className="hero-copy">台下的思绪、幕后的故事，和不方便在台上讲的那些。</p>
       </section>
 
       <section className="diary-list" aria-label="日记列表">
         {posts.length === 0 && !loading ? <p className="muted">还没有发布的日记。</p> : null}
         {posts.map((post) => (
-          <article className="diary-card glass-panel" key={post.id}>
+          <article className="diary-card home-glass" key={post.id}>
             <p className="eyebrow">{formatDiaryDate(post.publishedAt)}</p>
             <h2>{post.title}</h2>
             <p>{post.excerpt}</p>
-            <button type="button" className="ghost-button" onClick={() => onNavigate(`/diary/${post.id}`)}>
+            <button type="button" className="text-link" onClick={() => onNavigate(`/diary/${post.id}`)}>
               读 {post.title}
             </button>
             <span>{post.likeCount} 次喜欢</span>
@@ -90,7 +91,7 @@ function DiaryDetail({ postID, onNavigate }: { postID: string; onNavigate: (path
 
   if (!post) {
     return (
-      <main className="page diary-page">
+      <main className="page diary-detail-page">
         <SiteNav onNavigate={onNavigate} activePath="/diary" />
         <p className="muted">正在翻开日记...</p>
       </main>
@@ -98,28 +99,31 @@ function DiaryDetail({ postID, onNavigate }: { postID: string; onNavigate: (path
   }
 
   return (
-    <main className="page diary-page">
+    <main className="page diary-detail-page">
       <SiteNav onNavigate={onNavigate} activePath="/diary" />
-      <button type="button" className="ghost-button" onClick={() => onNavigate("/diary")}>返回日记列表</button>
-      <article className="diary-detail glass-panel">
+      <article className="diary-detail home-glass">
+        <button type="button" className="back-link" onClick={() => onNavigate("/diary")}>← 日记</button>
         <p className="eyebrow">{formatDiaryDate(post.publishedAt)}</p>
         <h1>{post.title}</h1>
-        <p className="diary-excerpt">{post.excerpt}</p>
-        <p>{post.content}</p>
-        <button type="button" className="primary-button" onClick={likePost}>喜欢 {post.likeCount}</button>
+        {post.excerpt ? <p className="diary-excerpt">{post.excerpt}</p> : null}
+        <div className="diary-body">{post.content}</div>
+        <button type="button" className="like-button" onClick={likePost}>
+          <span className="like-icon">♥</span> {post.likeCount}
+        </button>
       </article>
 
-      <section className="diary-comments glass-panel" aria-label="日记评论">
+      <section className="diary-comments home-glass" aria-label="日记评论">
         <h2>评论</h2>
-        {post.comments.length === 0 ? <p className="muted">还没有评论。</p> : null}
+        {post.comments.length === 0 ? <p className="muted">还没有评论，留一句吧。</p> : null}
         {post.comments.map((comment) => (
-          <article className="message-card" key={comment.id}>
+          <article className="comment-card" key={comment.id}>
+            <strong>{comment.nickname}</strong>
             <p>{comment.content}</p>
-            <span>{comment.nickname} · {formatDiaryDate(comment.createdAt)}</span>
+            <span>{formatDiaryDate(comment.createdAt)}</span>
           </article>
         ))}
         <form className="diary-comment-form" onSubmit={submitComment}>
-          <input value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} placeholder="昵称" />
+          <input value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} placeholder="你的昵称" />
           <textarea value={form.content} onChange={(event) => setForm({ ...form, content: event.target.value })} placeholder="想说的话" />
           <button type="submit" className="primary-button">留下评论</button>
         </form>

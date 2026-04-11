@@ -82,7 +82,7 @@ describe("CalendarPage", () => {
     await user.click(screen.getByRole("button", { name: /18/ }));
     expect(screen.getByRole("heading", { name: /2026-04-18 的演出/ })).toBeTruthy();
 
-    await user.click(screen.getByRole("button", { name: "下个月" }));
+    await user.click(screen.getByRole("button", { name: "下个月 →" }));
     expect(screen.queryByRole("heading", { name: /2026-04-18 的演出/ })).toBeNull();
     expect(screen.getByRole("heading", { name: "选择一个有演出的日子" })).toBeTruthy();
 

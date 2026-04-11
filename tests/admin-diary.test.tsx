@@ -41,6 +41,7 @@ describe("DiaryAdmin", () => {
     render(<DiaryAdmin />);
 
     await waitFor(() => expect(screen.getByText("还没有日记。")).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: "新增日记" }));
     await user.type(screen.getByPlaceholderText("文章标题"), "昨晚的开放麦");
     await user.type(screen.getByPlaceholderText("列表摘要"), "一个新段子第一次落地。");
     await user.type(screen.getByPlaceholderText("正文"), "上台前很紧张。");

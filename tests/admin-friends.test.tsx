@@ -37,8 +37,8 @@ describe("FriendsAdmin", () => {
             performerID: "performer-1",
             bio: "很会接梗的朋友。",
             quote: "台上见。",
-            photoUrl: "/covers/friend.jpg",
-            galleryUrls: ["/covers/one.jpg"],
+            photoUrl: null,
+            galleryUrls: [],
             createdAt: "2026-04-10T00:00:00.000Z",
             updatedAt: "2026-04-10T00:00:00.000Z"
           })
@@ -51,11 +51,10 @@ describe("FriendsAdmin", () => {
     render(<FriendsAdmin performers={performers} />);
 
     await waitFor(() => expect(screen.getByText("还没有朋友资料。")).toBeTruthy());
+    await user.click(screen.getByRole("button", { name: "新增朋友" }));
     await user.selectOptions(screen.getByLabelText("关联演员"), "performer-1");
     await user.type(screen.getByPlaceholderText("简介"), "很会接梗的朋友。");
     await user.type(screen.getByPlaceholderText("他的话"), "台上见。");
-    await user.type(screen.getByPlaceholderText("主照片 URL"), "/covers/friend.jpg");
-    await user.type(screen.getByPlaceholderText("相册 URL，每行一张，最多 5 张"), "/covers/one.jpg");
     await user.click(screen.getByRole("button", { name: "保存朋友" }));
 
     await waitFor(() => expect(screen.getByText("小明", { selector: "strong" })).toBeTruthy());

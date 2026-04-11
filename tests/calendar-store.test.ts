@@ -199,7 +199,7 @@ describe("calendar event store", () => {
     expect(store.listCalendarEvents({ month: "2026-04" })[0].title).toBe("周六开放麦");
   });
 
-  it("reports invalid calendar import rows without importing them", async () => {
+  it("imports rows with invalid or missing fields using fallbacks", async () => {
     const store = await createDataStore({ inMemory: true });
 
     const result = store.importCalendarRows([
@@ -209,16 +209,20 @@ describe("calendar event store", () => {
         brand: "",
         venue: "喜剧剧场",
         format: "脱口秀",
-        myRole: "主持",
-        showType: "开放麦"
+        myRole: "选手",
+        showType: "比赛"
       }
     ]);
 
-    expect(result.importedCount).toBe(0);
-    expect(result.skippedCount).toBe(1);
-    expect(result.errors.map((error) => error.field)).toContain("date");
-    expect(result.errors.map((error) => error.field)).toContain("brand");
-    expect(store.listCalendarEvents()).toEqual([]);
+    expect(result.importedCount).toBe(1);
+    expect(result.skippedCount).toBe(0);
+    const event = store.listCalendarEvents()[0];
+    expect(event.eventDate).toBe("");
+    expect(event.startTime).toBe("");
+    expect(event.brandID).toBeTruthy();
+    expect(event.format).toBe("other");
+    expect(event.myRole).toBe("other");
+    expect(event.showType).toBe("competition");
   });
 
   it("creates a ticket from a calendar event once", async () => {

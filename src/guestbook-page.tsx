@@ -46,10 +46,11 @@ export function GuestbookPage({ onNavigate }: { onNavigate: (path: string) => vo
       <section className="guestbook-hero">
         <p className="eyebrow">Guestbook</p>
         <h1>把笑声后面的那句话，也留在这里。</h1>
+        <p className="hero-copy">看过演出的、路过这里的，留下一句话就好。</p>
       </section>
 
       <section className="guestbook-layout">
-        <form className="guestbook-form glass-panel" onSubmit={submit}>
+        <form className="guestbook-form home-glass" onSubmit={submit}>
           <h2>留一句话</h2>
           <input value={form.nickname} onChange={(event) => setForm({ ...form, nickname: event.target.value })} placeholder="昵称" />
           <input value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="邮箱（选填）" />
@@ -58,7 +59,7 @@ export function GuestbookPage({ onNavigate }: { onNavigate: (path: string) => vo
           {notice ? <p className="muted">{notice}</p> : null}
         </form>
 
-        <section className="guestbook-list glass-panel" aria-label="留言列表">
+        <section className="guestbook-list home-glass" aria-label="留言列表">
           <h2>大家留下的声音</h2>
           {messages.length === 0 && !loading ? <p className="muted">还在等第一条通过审核的留言。</p> : null}
           {messages.map((message) => (
