@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CalendarPage } from "../src/calendar-page";
@@ -38,6 +38,8 @@ describe("CalendarPage", () => {
     render(<CalendarPage onNavigate={vi.fn()} initialMonth="2026-04" />);
 
     await waitFor(() => expect(screen.getByText("周六开放麦")).toBeTruthy());
+    const nav = screen.getByRole("navigation", { name: "全站导航" });
+    expect(within(nav).getByRole("button", { name: "演出日历" }).getAttribute("aria-current")).toBe("page");
     await user.click(screen.getByRole("button", { name: "列表" }));
     expect(screen.getByRole("heading", { name: /2026 年 4 月演出列表/i })).toBeTruthy();
     expect(screen.getByText(/笑声工厂/)).toBeTruthy();

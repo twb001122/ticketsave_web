@@ -8,6 +8,7 @@ import { HomePage } from "./home-page";
 import { GuestbookPage } from "./guestbook-page";
 import { DiaryPage } from "./diary-page";
 import { FriendsPage } from "./friends-page";
+import { SiteNav } from "./site-nav";
 import { CalendarAdmin } from "./admin-calendar";
 import { GuestbookAdmin } from "./admin-guestbook";
 import { DiaryAdmin } from "./admin-diary";
@@ -109,12 +110,7 @@ function ArchiveWall() {
 
   return (
     <main className="page">
-      <header className="topbar">
-        <button className="brand-lockup" onClick={() => navigate("/")}>
-          <img src="/app-icon.png" alt="XYSG" />
-          <span>XYSG 票根档案馆</span>
-        </button>
-      </header>
+      <SiteNav onNavigate={navigate} activePath="/tickets" />
 
       <section className="archive-intro">
         <div>
@@ -212,10 +208,18 @@ function ShowDetail({ id }: { id: string }) {
     fetchJSON<PublicShowSummary>(`/api/public/shows/${id}`).then(setShow).catch(showError);
   }, [id]);
 
-  if (!show) return <main className="page"><p className="muted">正在展开票根...</p></main>;
+  if (!show) {
+    return (
+      <main className="page">
+        <SiteNav onNavigate={navigate} activePath="/tickets" />
+        <p className="muted">正在展开票根...</p>
+      </main>
+    );
+  }
 
   return (
     <main className="page detail-page">
+      <SiteNav onNavigate={navigate} activePath="/tickets" />
       <button className="ghost-button" onClick={() => navigate("/tickets")}>返回票根墙</button>
       <section className="detail-layout">
         <CoverImage show={show} />
