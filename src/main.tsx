@@ -325,6 +325,7 @@ function ShowAdmin({ snapshot, onChanged }: { snapshot: Snapshot; onChanged: () 
   const emptyForm = useMemo(() => showToForm(null), []);
   const [form, setForm] = useState(emptyForm);
   const [cover, setCover] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
 
   function startEdit(show: ShowRecord | null) {
     setEditing(show);
@@ -342,15 +343,20 @@ function ShowAdmin({ snapshot, onChanged }: { snapshot: Snapshot; onChanged: () 
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
-    const data = new FormData();
-    for (const [key, value] of Object.entries(form)) data.set(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
-    if (cover) data.set("cover", await compressImage(cover), "cover.jpg");
-    const url = editing ? `/api/admin/shows/${editing.id}` : "/api/admin/shows";
-    const method = editing ? "PUT" : "POST";
-    const response = await fetch(url, { method, body: data });
-    if (!response.ok) return alert((await response.json()).error ?? "保存失败");
-    closeModal();
-    onChanged();
+    setSaving(true);
+    try {
+      const data = new FormData();
+      for (const [key, value] of Object.entries(form)) data.set(key, Array.isArray(value) ? JSON.stringify(value) : String(value));
+      if (cover) data.set("cover", await compressImage(cover), "cover.jpg");
+      const url = editing ? `/api/admin/shows/${editing.id}` : "/api/admin/shows";
+      const method = editing ? "PUT" : "POST";
+      const response = await fetch(url, { method, body: data });
+      if (!response.ok) return alert((await response.json()).error ?? "保存失败");
+      closeModal();
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function createPerformer(name: string) {
@@ -419,8 +425,16 @@ function ShowAdmin({ snapshot, onChanged }: { snapshot: Snapshot; onChanged: () 
               </div>
               <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="备注" />
               <label className="check-line"><input type="checkbox" checked={form.notesPublic} onChange={(event) => setForm({ ...form, notesPublic: event.target.checked })} /> 公开展示备注</label>
+              {editing?.coverFileName ? (
+                <div className="cover-preview">
+                  <img src={`/covers/${encodeURIComponent(editing.coverFileName)}`} alt="当前封面" />
+                  <span>{editing.coverFileName}</span>
+                </div>
+              ) : (
+                <p className="muted">暂无封面</p>
+              )}
               <input type="file" accept="image/*" onChange={(event) => setCover(event.target.files?.[0] ?? null)} />
-              <button className="primary-button" type="submit">{editing ? "保存修改" : "新增演出"}</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "提交中..." : editing ? "保存修改" : "新增演出"}</button>
             </form>
           </div>
         </div>
@@ -456,6 +470,7 @@ function CatalogPanel({ title, endpoint, items, fields, relations, onChanged }: 
   const [editing, setEditing] = useState<Record<string, any> | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState<Record<string, any>>(emptyForm);
+  const [saving, setSaving] = useState(false);
 
   function start(item: Record<string, any> | null) {
     setEditing(item);
@@ -471,15 +486,20 @@ function CatalogPanel({ title, endpoint, items, fields, relations, onChanged }: 
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
-    const url = editing ? `${endpoint}/${editing.id}` : endpoint;
-    const response = await fetch(url, {
-      method: editing ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form)
-    });
-    if (!response.ok) return alert((await response.json()).error ?? "保存失败");
-    closeModal();
-    onChanged();
+    setSaving(true);
+    try {
+      const url = editing ? `${endpoint}/${editing.id}` : endpoint;
+      const response = await fetch(url, {
+        method: editing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
+      if (!response.ok) return alert((await response.json()).error ?? "保存失败");
+      closeModal();
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -509,7 +529,7 @@ function CatalogPanel({ title, endpoint, items, fields, relations, onChanged }: 
               {relations.map((rel) => (
                 <MultiSelect key={rel.key} label={rel.label} values={form[rel.key] ?? []} options={rel.options} onChange={(values) => setForm({ ...form, [rel.key]: values })} />
               ))}
-              <button className="primary-button" type="submit">{editing ? "保存" : "新增"}</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "提交中..." : editing ? "保存" : "新增"}</button>
             </form>
           </div>
         </div>

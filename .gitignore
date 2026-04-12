@@ -7,3 +7,4 @@ data/
 .worktrees/
 *.zip
 *.tar.gz
+public/hero/.omc/

@@ -63,6 +63,7 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
   const [form, setForm] = useState<CalendarEventForm>(emptyForm);
   const [importText, setImportText] = useState("");
   const [importResult, setImportResult] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setForm((currentForm) => chooseCalendarAdminForm(editing, emptyForm, currentForm));
@@ -91,16 +92,21 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const url = editing ? `/api/admin/calendar/${editing.id}` : "/api/admin/calendar";
-    const response = await fetch(url, {
-      method: editing ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form)
-    });
-    if (!response.ok) return alert((await response.json()).error ?? "保存失败");
-    closeModal();
-    await refresh();
-    onChanged();
+    setSaving(true);
+    try {
+      const url = editing ? `/api/admin/calendar/${editing.id}` : "/api/admin/calendar";
+      const response = await fetch(url, {
+        method: editing ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form)
+      });
+      if (!response.ok) return alert((await response.json()).error ?? "保存失败");
+      closeModal();
+      await refresh();
+      onChanged();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function importJSON() {
@@ -179,7 +185,7 @@ export function CalendarAdmin({ brands, venues, onChanged }: CalendarAdminProps)
                 <EnumSelect value={form.showType} values={showTypes} labels={typeLabels} onChange={(showType) => setForm({ ...form, showType })} />
               </div>
               <textarea value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="备注" />
-              <button className="primary-button" type="submit">{editing ? "保存日历事件" : "新增日历事件"}</button>
+              <button className="primary-button" type="submit" disabled={saving}>{saving ? "提交中..." : editing ? "保存日历事件" : "新增日历事件"}</button>
               {editing ? <button type="button" className="danger" onClick={() => { deleteEvent(editing.id); closeModal(); }}>删除此事件</button> : null}
             </form>
           </div>

@@ -15,7 +15,8 @@ export function DiaryAdmin() {
   const [editing, setEditing] = useState<DiaryPostRecord | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const submitLabel = useMemo(() => editing ? "保存日记" : "发布日记", [editing]);
+  const [saving, setSaving] = useState(false);
+  const submitLabel = useMemo(() => saving ? "提交中..." : editing ? "保存日记" : "发布日记", [editing, saving]);
 
   useEffect(() => {
     void refresh();
@@ -46,17 +47,22 @@ export function DiaryAdmin() {
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const url = editing ? `/api/admin/diary/${editing.id}` : "/api/admin/diary";
-    const method = editing ? "PUT" : "POST";
-    const response = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, publishedAt: fromDatetimeLocal(form.publishedAt) })
-    });
-    if (!response.ok) return alert((await response.json()).error ?? "保存失败");
-    const saved = await response.json() as DiaryPostRecord;
-    setPosts((current) => editing ? current.map((post) => post.id === saved.id ? saved : post) : [saved, ...current]);
-    closeModal();
+    setSaving(true);
+    try {
+      const url = editing ? `/api/admin/diary/${editing.id}` : "/api/admin/diary";
+      const method = editing ? "PUT" : "POST";
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, publishedAt: fromDatetimeLocal(form.publishedAt) })
+      });
+      if (!response.ok) return alert((await response.json()).error ?? "保存失败");
+      const saved = await response.json() as DiaryPostRecord;
+      setPosts((current) => editing ? current.map((post) => post.id === saved.id ? saved : post) : [saved, ...current]);
+      closeModal();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function deletePost(id: string) {
@@ -105,7 +111,7 @@ export function DiaryAdmin() {
                 发布时间
                 <input type="datetime-local" value={form.publishedAt} onChange={(event) => setForm({ ...form, publishedAt: event.target.value })} />
               </label>
-              <button type="submit" className="primary-button">{submitLabel}</button>
+              <button type="submit" className="primary-button" disabled={saving}>{submitLabel}</button>
             </form>
           </div>
         </div>

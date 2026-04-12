@@ -15,7 +15,7 @@ export function CalendarPage({
   const [month, setMonth] = useState(initialMonth ?? currentMonthKey());
   const [mode, setMode] = useState<ViewMode>("month");
   const [events, setEvents] = useState<PublicCalendarEventSummary[]>([]);
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(() => todayKey());
 
   useEffect(() => {
     let active = true;
@@ -187,4 +187,14 @@ export function currentMonthKey(date = new Date()): string {
   const year = parts.find((part) => part.type === "year")?.value ?? String(date.getFullYear());
   const month = parts.find((part) => part.type === "month")?.value ?? String(date.getMonth() + 1).padStart(2, "0");
   return `${year}-${month}`;
+}
+
+function todayKey(): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  return formatter.format(new Date());
 }

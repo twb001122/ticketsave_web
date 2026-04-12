@@ -16,6 +16,7 @@ export function FriendsAdmin({ performers }: { performers: PerformerRecord[] }) 
   const [form, setForm] = useState(emptyForm);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     void refresh();
@@ -48,24 +49,29 @@ export function FriendsAdmin({ performers }: { performers: PerformerRecord[] }) 
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData();
-    data.set("performerID", form.performerID);
-    data.set("bio", form.bio);
-    data.set("quote", form.quote);
-    if (photoFile) {
-      const compressed = await compressImage(photoFile);
-      data.set("photo", compressed, "photo.jpg");
+    setSaving(true);
+    try {
+      const data = new FormData();
+      data.set("performerID", form.performerID);
+      data.set("bio", form.bio);
+      data.set("quote", form.quote);
+      if (photoFile) {
+        const compressed = await compressImage(photoFile);
+        data.set("photo", compressed, "photo.jpg");
+      }
+      for (const file of galleryFiles) {
+        const compressed = await compressImage(file);
+        data.append("gallery", compressed, `gallery-${galleryFiles.indexOf(file)}.jpg`);
+      }
+      const url = editing ? `/api/admin/friends/${editing.id}` : "/api/admin/friends";
+      const response = await fetch(url, { method: editing ? "PUT" : "POST", body: data });
+      if (!response.ok) return alert((await response.json()).error ?? "保存失败");
+      const saved = await response.json() as FriendRecord;
+      setFriends((current) => editing ? current.map((friend) => friend.id === saved.id ? saved : friend) : [saved, ...current]);
+      closeModal();
+    } finally {
+      setSaving(false);
     }
-    for (const file of galleryFiles) {
-      const compressed = await compressImage(file);
-      data.append("gallery", compressed, `gallery-${galleryFiles.indexOf(file)}.jpg`);
-    }
-    const url = editing ? `/api/admin/friends/${editing.id}` : "/api/admin/friends";
-    const response = await fetch(url, { method: editing ? "PUT" : "POST", body: data });
-    if (!response.ok) return alert((await response.json()).error ?? "保存失败");
-    const saved = await response.json() as FriendRecord;
-    setFriends((current) => editing ? current.map((friend) => friend.id === saved.id ? saved : friend) : [saved, ...current]);
-    closeModal();
   }
 
   async function deleteFriend(id: string) {
@@ -126,7 +132,7 @@ export function FriendsAdmin({ performers }: { performers: PerformerRecord[] }) 
                 ) : null}
                 <input type="file" accept="image/*" multiple onChange={(event) => setGalleryFiles(Array.from(event.target.files ?? []).slice(0, 5))} />
               </label>
-              <button type="submit" className="primary-button">保存朋友</button>
+              <button type="submit" className="primary-button" disabled={saving}>{saving ? "提交中..." : "保存朋友"}</button>
             </form>
           </div>
         </div>

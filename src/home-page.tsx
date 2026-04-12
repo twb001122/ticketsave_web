@@ -94,7 +94,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
           <div className="hero-entry-story">
             <img
               className="hero-entry-cover"
-              src="https://images.pexels.com/photos/34939602/pexels-photo-34939602.jpeg?auto=compress&cs=tinysrgb&w=720"
+              src="/hero/cover.jpg"
               alt="东四路口的夜色"
             />
             <div>
@@ -105,19 +105,19 @@ export function HomePage({ onNavigate }: HomePageProps) {
           <div className="hero-entry-footer">
             <div className="hero-entry-readers" aria-label="18 人读过">
               <img
-                src="https://images.pexels.com/photos/36741810/pexels-photo-36741810.jpeg?auto=compress&cs=tinysrgb&w=120"
+                src="/hero/avatar1.jpg"
                 alt="读者头像一"
               />
               <img
-                src="https://images.pexels.com/photos/30494309/pexels-photo-30494309.jpeg?auto=compress&cs=tinysrgb&w=120"
+                src="/hero/avatar2.jpg"
                 alt="读者头像二"
               />
               <img
-                src="https://images.pexels.com/photos/31150358/pexels-photo-31150358.jpeg?auto=compress&cs=tinysrgb&w=120"
+                src="/hero/avatar3.jpg"
                 alt="读者头像三"
               />
               <img
-                src="https://images.pexels.com/photos/29839522/pexels-photo-29839522.jpeg?auto=compress&cs=tinysrgb&w=120"
+                src="/hero/avatar4.jpg"
                 alt="读者头像四"
               />
               <em>+14</em>
@@ -191,7 +191,7 @@ export function HomePage({ onNavigate }: HomePageProps) {
               <FriendPhoto friend={friend} />
               <span className="home-friend-kicker">{friend.stageName ?? "Comedy Friend"}</span>
               <strong>{friend.displayName}</strong>
-              <p>{friend.bio}</p>
+              {friend.quote ? <p>「{friend.quote}」</p> : null}
               <em>{friend.relationship.sameShowCount > 0 ? `同台 ${friend.relationship.sameShowCount} 场` : "资料整理中"}</em>
             </button>
           ))}

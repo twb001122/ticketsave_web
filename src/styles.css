@@ -1798,6 +1798,25 @@ dd {
   background: rgba(0, 0, 0, 0.12);
 }
 
+.cover-preview {
+  display: grid;
+  gap: 6px;
+}
+
+.cover-preview img {
+  width: 120px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1px solid rgba(217, 230, 224, 0.6);
+}
+
+.cover-preview span {
+  font-size: 0.8em;
+  color: var(--muted);
+  word-break: break-all;
+}
+
 .editor-panel,
 .catalog-panel form {
   display: grid;
